@@ -1,8 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 
@@ -21,21 +20,43 @@ type Shift = {
   start_time: string
   end_time: string
   required_workers: number
+  color?: string | null
 }
 
 type Assignment = {
   id: string
   shift_id: string
   employee_id: string | null
+  manual_name: string | null
   status: string
-  shifts: Shift | null
 }
 
-type DropRequest = {
+type Member = {
   id: string
-  assignment_id: string
-  status: "pending" | "approved" | "denied"
-  reason: string | null
+  user_id: string
+  display_name: string
+  role: string
+  is_active: boolean
+}
+
+const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+function formatWeekday(dateString: string) {
+  const date = new Date(dateString + "T00:00:00")
+  return weekdayLabels[date.getDay()]
+}
+
+function getDatesInRange(start: string, end: string) {
+  const results: string[] = []
+  const current = new Date(start + "T00:00:00")
+  const last = new Date(end + "T00:00:00")
+
+  while (current <= last) {
+    results.push(current.toISOString().slice(0, 10))
+    current.setDate(current.getDate() + 1)
+  }
+
+  return results
 }
 
 export function MySchedulePeriodView({ periodId }: { periodId: string }) {
@@ -43,11 +64,12 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
   const { organization, member, isLoading } = useOrgSafe()
 
   const [period, setPeriod] = useState<Period | null>(null)
+  const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [dropRequests, setDropRequests] = useState<Record<string, DropRequest>>({})
+  const [members, setMembers] = useState<Member[]>([])
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
   const [loading, setLoading] = useState(true)
-  const [reasonByAssignment, setReasonByAssignment] = useState<Record<string, string>>({})
-  const [submittingId, setSubmittingId] = useState<string | null>(null)
+  const [submittingShiftId, setSubmittingShiftId] = useState<string | null>(null)
 
   async function loadData() {
     if (!organization || !member) {
@@ -57,62 +79,46 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
 
     setLoading(true)
 
-    const { data: periodData } = await supabase
-      .from("scheduling_periods")
-      .select("id, name, start_date, end_date, status")
-      .eq("id", periodId)
-      .eq("organization_id", organization.id)
-      .single()
+    const [{ data: periodData }, { data: memberData }, { data: shiftData }] = await Promise.all([
+      supabase
+        .from("scheduling_periods")
+        .select("id, name, start_date, end_date, status")
+        .eq("id", periodId)
+        .eq("organization_id", organization.id)
+        .single(),
+      supabase
+        .from("organization_members")
+        .select("id, user_id, display_name, role, is_active")
+        .eq("organization_id", organization.id)
+        .eq("is_active", true)
+        .order("display_name"),
+      supabase
+        .from("shifts")
+        .select("id, date, label, start_time, end_time, required_workers, color")
+        .eq("scheduling_period_id", periodId)
+        .order("date", { ascending: true })
+        .order("start_time", { ascending: true }),
+    ])
 
-    setPeriod((periodData as Period) || null)
+    const normalizedPeriod = (periodData as Period) || null
+    const normalizedMembers = (memberData as Member[]) || []
+    const normalizedShifts = (shiftData as Shift[]) || []
 
-    const { data: shiftData } = await supabase
-      .from("shifts")
-      .select("id, date, label, start_time, end_time, required_workers")
-      .eq("scheduling_period_id", periodId)
-      .order("date", { ascending: true })
-      .order("start_time", { ascending: true })
+    setPeriod(normalizedPeriod)
+    setMembers(normalizedMembers)
+    setShifts(normalizedShifts)
 
-    const shiftMap = Object.fromEntries((((shiftData as Shift[]) || []).map((s) => [s.id, s])))
+    const shiftIds = normalizedShifts.map((shift) => shift.id)
 
-    const shiftIds = (((shiftData as Shift[]) || []).map((s) => s.id))
-    if (shiftIds.length === 0) {
-      setAssignments([])
-      setDropRequests({})
-      setLoading(false)
-      return
-    }
+    if (normalizedPeriod?.status === "published" && shiftIds.length > 0) {
+      const { data: assignmentData } = await supabase
+        .from("shift_assignments")
+        .select("id, shift_id, employee_id, manual_name, status")
+        .in("shift_id", shiftIds)
 
-    const { data: assignmentData } = await supabase
-      .from("shift_assignments")
-      .select("id, shift_id, employee_id, status")
-      .eq("employee_id", member.user_id)
-      .in("shift_id", shiftIds)
-      .order("assigned_at", { ascending: true })
-
-    const normalizedAssignments = (((assignmentData as { id: string; shift_id: string; employee_id: string | null; status: string }[]) || []).map((row) => ({
-      id: row.id,
-      shift_id: row.shift_id,
-      employee_id: row.employee_id,
-      status: row.status,
-      shifts: shiftMap[row.shift_id] || null,
-    })))
-
-    setAssignments(normalizedAssignments)
-
-    const assignmentIds = normalizedAssignments.map((a) => a.id)
-    if (assignmentIds.length > 0) {
-      const { data: requestData } = await supabase
-        .from("drop_requests")
-        .select("id, assignment_id, status, reason")
-        .in("assignment_id", assignmentIds)
-
-      const mapped = Object.fromEntries(
-        (((requestData as DropRequest[]) || []).map((r) => [r.assignment_id, r]))
-      )
-      setDropRequests(mapped)
+      setAssignments((assignmentData as Assignment[]) || [])
     } else {
-      setDropRequests({})
+      setAssignments([])
     }
 
     setLoading(false)
@@ -122,35 +128,144 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
     void loadData()
   }, [organization?.id, member?.user_id, periodId])
 
-  async function requestDrop(assignmentId: string) {
+  const groupedAssignments = useMemo(() => {
+    return assignments.reduce<Record<string, Assignment[]>>((acc, assignment) => {
+      if (!acc[assignment.shift_id]) acc[assignment.shift_id] = []
+      acc[assignment.shift_id].push(assignment)
+      return acc
+    }, {})
+  }, [assignments])
+
+  const shiftsByDate = useMemo(() => {
+    return shifts.reduce<Record<string, Shift[]>>((acc, shift) => {
+      if (!acc[shift.date]) acc[shift.date] = []
+      acc[shift.date].push(shift)
+      return acc
+    }, {})
+  }, [shifts])
+
+  const calendarDates = useMemo(() => {
+    if (!period) return []
+    return getDatesInRange(period.start_date, period.end_date)
+  }, [period])
+
+  function getAssignedNames(shiftId: string) {
+    const assigned = groupedAssignments[shiftId] || []
+    return assigned.map((assignment) => {
+      const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+      return {
+        id: assignment.id,
+        name: assignedMember?.display_name || assignment.manual_name || "Assigned",
+        isCurrentUser: assignment.employee_id === member?.user_id,
+      }
+    })
+  }
+
+  async function requestDrop(shiftId: string) {
     if (!member?.user_id) return
 
-    if (dropRequests[assignmentId]?.status === "pending") {
-      alert("A drop request is already pending for this shift.")
+    const assigned = (groupedAssignments[shiftId] || []).find(
+      (assignment) => assignment.employee_id === member.user_id && assignment.status === "assigned"
+    )
+
+    if (!assigned) {
+      alert("You are not assigned to this shift.")
       return
     }
 
-    setSubmittingId(assignmentId)
+    setSubmittingShiftId(shiftId)
+
+    const { data: existingRequest } = await supabase
+      .from("drop_requests")
+      .select("id, status")
+      .eq("assignment_id", assigned.id)
+      .maybeSingle()
+
+    if (existingRequest && existingRequest.status === "pending") {
+      setSubmittingShiftId(null)
+      alert("You already have a pending drop request for this shift.")
+      return
+    }
 
     const { error } = await supabase.from("drop_requests").insert({
-      assignment_id: assignmentId,
+      assignment_id: assigned.id,
       requested_by: member.user_id,
-      reason: reasonByAssignment[assignmentId] || null,
       status: "pending",
+      reason: null,
     })
 
-    setSubmittingId(null)
+    setSubmittingShiftId(null)
 
     if (error) {
       alert(error.message)
       return
     }
 
-    await loadData()
+    alert("Drop request submitted.")
+  }
+
+  function renderShiftCard(shift: Shift) {
+    const assignedPeople = getAssignedNames(shift.id)
+    const currentUserAssigned = assignedPeople.some((person) => person.isCurrentUser)
+
+    return (
+      <div
+        key={shift.id}
+        className="rounded-lg border p-3"
+        style={{ borderLeftWidth: "6px", borderLeftColor: shift.color || "#3B82F6" }}
+      >
+        <div className="font-medium text-slate-900">{shift.label}</div>
+        <div className="mt-1 text-xs text-slate-600">
+          {shift.start_time} - {shift.end_time}
+        </div>
+        <div className="mt-1 text-xs text-slate-500">
+          {assignedPeople.length}/{shift.required_workers} assigned
+        </div>
+
+        <div className="mt-3">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Working This Shift
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {assignedPeople.length === 0 ? (
+              <span className="text-xs text-slate-500">No one assigned.</span>
+            ) : (
+              assignedPeople.map((person) => (
+                <span
+                  key={person.id}
+                  className={
+                    person.isCurrentUser
+                      ? "rounded-full bg-blue-100 px-2.5 py-1 text-xs font-medium text-blue-700"
+                      : "rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                  }
+                >
+                  {person.name}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+
+        {period?.status === "published" && currentUserAssigned ? (
+          <div className="mt-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submittingShiftId === shift.id}
+              onClick={() => void requestDrop(shift.id)}
+            >
+              {submittingShiftId === shift.id ? "Requesting..." : "Request Drop"}
+            </Button>
+          </div>
+        ) : null}
+      </div>
+    )
   }
 
   if (isLoading || loading) {
-    return <div className="rounded-lg border bg-white p-6">Loading your schedule...</div>
+    return <div className="rounded-lg border bg-white p-6">Loading schedule...</div>
   }
 
   if (!organization || !member) {
@@ -161,64 +276,98 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
     return <div className="rounded-lg border bg-white p-6">Published schedule not found.</div>
   }
 
+  if (period.status !== "published") {
+    return (
+      <div className="rounded-lg border bg-white p-6">
+        This schedule period has not been published yet.
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="rounded-lg border bg-white p-6">
-        <h1 className="text-2xl font-semibold">{period.name}</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          {period.start_date} → {period.end_date} · Status: {period.status}
-        </p>
-      </div>
-
-      <div className="rounded-lg border bg-white p-6">
-        {assignments.length === 0 ? (
-          <div className="text-sm text-slate-600">You do not have any assigned shifts in this period.</div>
-        ) : (
-          <div className="space-y-4">
-            {assignments.map((assignment) => {
-              const request = dropRequests[assignment.id]
-              return (
-                <div key={assignment.id} className="rounded-lg border p-4">
-                  <div className="font-medium text-slate-900">{assignment.shifts?.label || "Shift"}</div>
-                  <div className="mt-1 text-sm text-slate-600">
-                    {assignment.shifts?.date} · {assignment.shifts?.start_time} - {assignment.shifts?.end_time}
-                  </div>
-                  <div className="mt-2 text-xs text-slate-500">
-                    Assignment status: {assignment.status}
-                  </div>
-
-                  {request ? (
-                    <div className="mt-3 rounded-lg border bg-slate-50 p-3 text-sm text-slate-700">
-                      Drop request status: <strong>{request.status}</strong>
-                      {request.reason ? <div className="mt-1 text-xs text-slate-500">Reason: {request.reason}</div> : null}
-                    </div>
-                  ) : (
-                    <div className="mt-4 space-y-3">
-                      <Textarea
-                        placeholder="Optional reason for dropping this shift"
-                        value={reasonByAssignment[assignment.id] || ""}
-                        onChange={(e) =>
-                          setReasonByAssignment((prev) => ({
-                            ...prev,
-                            [assignment.id]: e.target.value,
-                          }))
-                        }
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() => void requestDrop(assignment.id)}
-                        disabled={submittingId === assignment.id}
-                      >
-                        {submittingId === assignment.id ? "Submitting..." : "Request Drop"}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold">{period.name}</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              {period.start_date} → {period.end_date} · Published Team Schedule
+            </p>
+            <p className="mt-2 text-sm text-slate-600">
+              This shows the full team schedule, including who you are working with on each shift.
+            </p>
           </div>
-        )}
+
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant={viewMode === "calendar" ? "default" : "outline"}
+              onClick={() => setViewMode("calendar")}
+            >
+              Weekly Calendar
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === "list" ? "default" : "outline"}
+              onClick={() => setViewMode("list")}
+            >
+              List View
+            </Button>
+          </div>
+        </div>
       </div>
+
+      {viewMode === "calendar" ? (
+        <div className="rounded-lg border bg-white p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Employees can see the full published team schedule and who is assigned to each shift.
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="grid min-w-[1100px] grid-cols-7 gap-4">
+              {calendarDates.map((date) => (
+                <div key={date} className="rounded-lg border bg-slate-50 p-3">
+                  <div className="border-b pb-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {formatWeekday(date)}
+                    </div>
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {date}
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {(shiftsByDate[date] || []).length === 0 ? (
+                      <div className="rounded-lg border border-dashed bg-white p-3 text-xs text-slate-500">
+                        No shifts
+                      </div>
+                    ) : (
+                      (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border bg-white p-6">
+          <h2 className="text-lg font-semibold">List View</h2>
+
+          {shifts.length === 0 ? (
+            <div className="mt-4 text-sm text-slate-600">
+              No published shifts in this period yet.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {shifts.map((shift) => renderShiftCard(shift))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

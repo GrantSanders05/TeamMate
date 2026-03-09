@@ -14,6 +14,7 @@ type Period = {
   end_date: string
   status: string
   period_type: string
+  availability_link_token?: string | null
 }
 
 type ShiftType = {
@@ -50,6 +51,12 @@ type Assignment = {
   status: string
 }
 
+type AvailabilityCount = {
+  shift_id: string
+  available_count: number
+  unavailable_count: number
+}
+
 export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const supabase = createClient()
   const { organization, member, isManager } = useOrgSafe()
@@ -59,6 +66,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [members, setMembers] = useState<Member[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
+  const [availabilityCounts, setAvailabilityCounts] = useState<Record<string, AvailabilityCount>>({})
   const [loading, setLoading] = useState(true)
 
   const [newShiftDate, setNewShiftDate] = useState("")
@@ -80,7 +88,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       await Promise.all([
         supabase
           .from("scheduling_periods")
-          .select("id, name, start_date, end_date, status, period_type")
+          .select("id, name, start_date, end_date, status, period_type, availability_link_token")
           .eq("id", periodId)
           .single(),
         supabase
@@ -101,22 +109,53 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           .order("date", { ascending: true }),
       ])
 
+    const normalizedShifts = (shiftData as Shift[]) || []
     setPeriod((periodData as Period) || null)
     setShiftTypes((shiftTypeData as ShiftType[]) || [])
     setMembers(((memberData as Member[]) || []).filter((m) => m.role === "employee" || m.role === "manager"))
-    setShifts((shiftData as Shift[]) || [])
+    setShifts(normalizedShifts)
 
-    const shiftIds = ((shiftData as Shift[]) || []).map((shift) => shift.id)
+    const shiftIds = normalizedShifts.map((shift) => shift.id)
 
     if (shiftIds.length > 0) {
-      const { data: assignmentData } = await supabase
-        .from("shift_assignments")
-        .select("id, shift_id, employee_id, manual_name, status")
-        .in("shift_id", shiftIds)
+      const [{ data: assignmentData }, { data: availabilityData }] = await Promise.all([
+        supabase
+          .from("shift_assignments")
+          .select("id, shift_id, employee_id, manual_name, status")
+          .in("shift_id", shiftIds),
+        supabase
+          .from("availability_responses")
+          .select("shift_id, status")
+          .in("shift_id", shiftIds),
+      ])
 
       setAssignments((assignmentData as Assignment[]) || [])
+
+      const counts = ((availabilityData as { shift_id: string; status: string }[]) || []).reduce<Record<string, AvailabilityCount>>(
+        (acc, row) => {
+          if (!acc[row.shift_id]) {
+            acc[row.shift_id] = {
+              shift_id: row.shift_id,
+              available_count: 0,
+              unavailable_count: 0,
+            }
+          }
+
+          if (row.status === "available" || row.status === "all_day") {
+            acc[row.shift_id].available_count += 1
+          } else if (row.status === "unavailable") {
+            acc[row.shift_id].unavailable_count += 1
+          }
+
+          return acc
+        },
+        {}
+      )
+
+      setAvailabilityCounts(counts)
     } else {
       setAssignments([])
+      setAvailabilityCounts({})
     }
 
     setLoading(false)
@@ -205,12 +244,20 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     await loadData()
   }
 
-  async function publishPeriod() {
+  async function updateStatus(nextStatus: "collecting" | "scheduling" | "published") {
     if (!period) return
+
+    const updatePayload: Record<string, string> = {
+      status: nextStatus,
+    }
+
+    if (nextStatus === "published") {
+      updatePayload.published_at = new Date().toISOString()
+    }
 
     const { error } = await supabase
       .from("scheduling_periods")
-      .update({ status: "published", published_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("id", period.id)
 
     if (error) {
@@ -219,6 +266,14 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     }
 
     await loadData()
+  }
+
+  async function copyAvailabilityLink() {
+    if (!period || typeof window === "undefined") return
+    const token = period.availability_link_token || ""
+    const url = `${window.location.origin}/availability/${period.id}?token=${token}`
+    await navigator.clipboard.writeText(url)
+    alert("Availability link copied.")
   }
 
   if (loading) {
@@ -245,9 +300,20 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           </div>
 
           {isManager ? (
-            <Button onClick={publishPeriod}>
-              Publish Schedule
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              {period.status === "draft" ? (
+                <Button onClick={() => void updateStatus("collecting")}>Open for Availability</Button>
+              ) : null}
+              {period.status === "collecting" ? (
+                <>
+                  <Button variant="outline" onClick={copyAvailabilityLink}>Copy Availability Link</Button>
+                  <Button onClick={() => void updateStatus("scheduling")}>Close Availability</Button>
+                </>
+              ) : null}
+              {period.status === "scheduling" ? (
+                <Button onClick={() => void updateStatus("published")}>Publish Schedule</Button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>
@@ -347,6 +413,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           <div className="mt-4 space-y-4">
             {shifts.map((shift) => {
               const assigned = groupedAssignments[shift.id] || []
+              const counts = availabilityCounts[shift.id] || {
+                shift_id: shift.id,
+                available_count: 0,
+                unavailable_count: 0,
+              }
+
               return (
                 <div key={shift.id} className="rounded-lg border p-4">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -357,9 +429,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                       <div className="mt-1 text-sm text-slate-600">
                         {shift.date} · {shift.start_time} - {shift.end_time} · {assigned.length}/{shift.required_workers} assigned
                       </div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {counts.available_count} available · {counts.unavailable_count} unavailable
+                      </div>
                     </div>
 
-                    {isManager ? (
+                    {isManager && period.status !== "published" ? (
                       <div className="w-full md:w-64">
                         <select
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -393,7 +468,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                             className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm"
                           >
                             <span>{assignedMember?.display_name || assignment.manual_name || "Assigned"}</span>
-                            {isManager ? (
+                            {isManager && period.status !== "published" ? (
                               <button
                                 className="text-slate-500 hover:text-red-600"
                                 onClick={() => void unassignMember(assignment.id)}

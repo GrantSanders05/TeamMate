@@ -16,23 +16,14 @@ export function AppShell({
 }) {
   return (
     <OrgProvider userId={userId}>
-      <div className="min-h-screen bg-slate-50 flex">
-        {/* Desktop sidebar */}
+      <div className="min-h-screen bg-slate-50 md:flex">
         <Sidebar />
-        
-        {/* Main content */}
-        <div className="flex-1 flex flex-col min-w-0">
-          <TopBar userEmail={userEmail} userId={userId} />
-          <main className="flex-1 overflow-auto pb-20 md:pb-0">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 animate-fade-in">
-              {children}
-            </div>
-          </main>
+        <div className="flex min-h-screen flex-1 flex-col">
+          <TopBar userId={userId} userEmail={userEmail} />
+          <main className="flex-1 p-4 pb-24 md:p-6 md:pb-6">{children}</main>
         </div>
+        <MobileNav />
       </div>
-
-      {/* Mobile bottom nav */}
-      <MobileNav />
     </OrgProvider>
   )
 }

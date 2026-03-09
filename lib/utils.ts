@@ -27,11 +27,9 @@ export function generateSlug(name: string): string {
 }
 
 export function formatTime(time: string): string {
-  // time is HH:MM:SS or HH:MM
   const [hours, minutes] = time.split(":").map(Number)
   const date = new Date()
   date.setHours(hours, minutes)
-
   return format(date, "h:mm a")
 }
 
@@ -54,7 +52,6 @@ export function calculateShiftHours(startTime: string, endTime: string): number 
   const startMinutes = startH * 60 + startM
   let endMinutes = endH * 60 + endM
 
-  // Handle overnight shifts
   if (endMinutes < startMinutes) {
     endMinutes += 24 * 60
   }

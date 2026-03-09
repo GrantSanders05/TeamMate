@@ -23,7 +23,7 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 }
 
@@ -31,70 +31,87 @@
   * {
     @apply border-border;
   }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    letter-spacing: -0.02em;
   }
 }
 
 /* Font family classes */
-.font-inter { font-family: var(--font-inter), system-ui, sans-serif; }
-.font-plus-jakarta { font-family: var(--font-plus-jakarta), system-ui, sans-serif; }
-.font-dm-sans { font-family: var(--font-dm-sans), system-ui, sans-serif; }
-.font-outfit { font-family: var(--font-outfit), system-ui, sans-serif; }
+.font-inter {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+.font-plus-jakarta {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+}
+
+.font-dm-sans {
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+}
+
+.font-outfit {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
 
 /* Organization-level font override */
-[data-org-font="Inter"] { font-family: var(--font-inter), system-ui, sans-serif; }
-[data-org-font="Plus Jakarta Sans"] { font-family: var(--font-plus-jakarta), system-ui, sans-serif; }
-[data-org-font="DM Sans"] { font-family: var(--font-dm-sans), system-ui, sans-serif; }
-[data-org-font="Outfit"] { font-family: var(--font-outfit), system-ui, sans-serif; }
+[data-org-font="Inter"] {
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+
+[data-org-font="Plus Jakarta Sans"] {
+  font-family: var(--font-plus-jakarta), system-ui, sans-serif;
+}
+
+[data-org-font="DM Sans"] {
+  font-family: var(--font-dm-sans), system-ui, sans-serif;
+}
+
+[data-org-font="Outfit"] {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
 
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background: #d1d5db;
-  border-radius: 3px;
+  border-radius: 9999px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
 
 /* Print styles */
 @media print {
-  .no-print { display: none !important; }
-  .print-only { display: block !important; }
-  body { background: white; }
-}
+  .no-print {
+    display: none !important;
+  }
 
-/* Animation utilities */
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out;
-}
-
-@keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Schedule grid */
-.schedule-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 1px;
-  background: #e5e7eb;
-}
-
-.schedule-grid-cell {
-  background: white;
-  min-height: 120px;
-}
-
-/* Mobile tab bar safe area */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  .print-only {
+    display: block !important;
+  }
 }

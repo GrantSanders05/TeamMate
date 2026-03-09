@@ -23,6 +23,8 @@ type ShiftType = {
   start_time: string
   end_time: string
   color: string
+  required_workers: number
+  is_active?: boolean
 }
 
 type Member = {
@@ -103,7 +105,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           .single(),
         supabase
           .from("shift_types")
-          .select("id, name, start_time, end_time, color")
+          .select("id, name, start_time, end_time, color, required_workers, is_active")
           .eq("organization_id", organization.id)
           .order("name"),
         supabase
@@ -127,7 +129,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     const shiftIds = normalizedShifts.map((shift) => shift.id)
 
     setPeriod((periodData as Period) || null)
-    setShiftTypes((shiftTypeData as ShiftType[]) || [])
+    setShiftTypes((((shiftTypeData as ShiftType[]) || []).filter((t) => t.is_active !== false)))
     setMembers(normalizedMembers)
     setShifts(normalizedShifts)
 
@@ -210,6 +212,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     setNewShiftLabel(selected.name)
     setNewShiftStart(selected.start_time)
     setNewShiftEnd(selected.end_time)
+    setNewShiftRequiredWorkers(String(selected.required_workers || 1))
   }
 
   async function createShift(e: React.FormEvent<HTMLFormElement>) {
@@ -368,9 +371,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       {isManager ? (
         <form className="rounded-lg border bg-white p-6 space-y-4" onSubmit={createShift}>
           <h2 className="text-lg font-semibold">Add Shift</h2>
+          <p className="text-sm text-slate-600">
+            Pick a template to auto-fill the shift, then change the date or any details you want before saving.
+          </p>
 
           <div>
-            <Label htmlFor="shiftType">Shift type</Label>
+            <Label htmlFor="shiftType">Shift template</Label>
             <select
               id="shiftType"
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -380,7 +386,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               <option value="">Custom shift</option>
               {shiftTypes.map((type) => (
                 <option key={type.id} value={type.id}>
-                  {type.name}
+                  {type.name} · {type.start_time}-{type.end_time}
                 </option>
               ))}
             </select>

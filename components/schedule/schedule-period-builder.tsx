@@ -110,6 +110,8 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [newShiftStart, setNewShiftStart] = useState("")
   const [newShiftEnd, setNewShiftEnd] = useState("")
   const [newShiftRequiredWorkers, setNewShiftRequiredWorkers] = useState("1")
+  const [selectedBulkDates, setSelectedBulkDates] = useState<string[]>([])
+  const [bulkCreating, setBulkCreating] = useState(false)
 
   async function loadData() {
     if (!organization) {
@@ -251,7 +253,17 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     setNewShiftRequiredWorkers(String(selected.required_workers || 1))
   }
 
-  async function createShift(e: React.FormEvent<HTMLFormElement>) {
+  function resetShiftForm() {
+    setNewShiftDate("")
+    setNewShiftTypeId("")
+    setNewShiftLabel("")
+    setNewShiftStart("")
+    setNewShiftEnd("")
+    setNewShiftRequiredWorkers("1")
+    setSelectedBulkDates([])
+  }
+
+  async function createSingleShift(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!periodId) return
 
@@ -273,12 +285,90 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       return
     }
 
-    setNewShiftDate("")
-    setNewShiftTypeId("")
-    setNewShiftLabel("")
-    setNewShiftStart("")
-    setNewShiftEnd("")
-    setNewShiftRequiredWorkers("1")
+    resetShiftForm()
+    await loadData()
+  }
+
+  function toggleBulkDate(date: string) {
+    setSelectedBulkDates((prev) =>
+      prev.includes(date) ? prev.filter((item) => item !== date) : [...prev, date]
+    )
+  }
+
+  async function createBulkShifts() {
+    if (!periodId || selectedBulkDates.length === 0) {
+      alert("Choose at least one date for bulk creation.")
+      return
+    }
+
+    const template = shiftTypes.find((item) => item.id === newShiftTypeId)
+    const existingKeys = new Set(
+      shifts.map((shift) => `${shift.date}|${shift.label}|${shift.start_time}|${shift.end_time}`)
+    )
+
+    const rows = selectedBulkDates
+      .filter((date) => !existingKeys.has(`${date}|${newShiftLabel}|${newShiftStart}|${newShiftEnd}`))
+      .map((date) => ({
+        scheduling_period_id: periodId,
+        shift_type_id: newShiftTypeId || null,
+        date,
+        label: newShiftLabel,
+        start_time: newShiftStart,
+        end_time: newShiftEnd,
+        required_workers: Number(newShiftRequiredWorkers || "1"),
+        color: template?.color || "#3B82F6",
+      }))
+
+    if (rows.length === 0) {
+      alert("All selected dates already have this same shift.")
+      return
+    }
+
+    setBulkCreating(true)
+
+    const { error } = await supabase.from("shifts").insert(rows)
+
+    setBulkCreating(false)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    resetShiftForm()
+    await loadData()
+  }
+
+  async function duplicateShiftToDate(shift: Shift, date: string) {
+    const exists = shifts.some(
+      (item) =>
+        item.date === date &&
+        item.label === shift.label &&
+        item.start_time === shift.start_time &&
+        item.end_time === shift.end_time
+    )
+
+    if (exists) {
+      alert("That date already has the same shift.")
+      return
+    }
+
+    const { error } = await supabase.from("shifts").insert({
+      scheduling_period_id: periodId,
+      shift_type_id: shift.shift_type_id,
+      date,
+      label: shift.label,
+      start_time: shift.start_time,
+      end_time: shift.end_time,
+      required_workers: shift.required_workers,
+      color: shift.color || "#3B82F6",
+    })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
     await loadData()
   }
 
@@ -390,7 +480,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         </div>
 
         {isManager && period?.status !== "published" ? (
-          <div className="mt-3">
+          <div className="mt-3 space-y-2">
             <select
               className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
               defaultValue=""
@@ -410,6 +500,25 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   </option>
                 ))
               )}
+            </select>
+
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+              defaultValue=""
+              onChange={(e) => {
+                if (!e.target.value) return
+                void duplicateShiftToDate(shift, e.target.value)
+                e.currentTarget.value = ""
+              }}
+            >
+              <option value="">Duplicate to another date</option>
+              {calendarDates
+                .filter((date) => date !== shift.date)
+                .map((date) => (
+                  <option key={date} value={date}>
+                    {formatWeekday(date)} · {date}
+                  </option>
+                ))}
             </select>
           </div>
         ) : null}
@@ -502,90 +611,164 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       </div>
 
       {isManager ? (
-        <form className="rounded-lg border bg-white p-6 space-y-4" onSubmit={createShift}>
-          <h2 className="text-lg font-semibold">Add Shift</h2>
-          <p className="text-sm text-slate-600">
-            Pick a template to auto-fill the shift, then change the date or any details you want before saving.
-          </p>
+        <div className="space-y-6">
+          <form className="rounded-lg border bg-white p-6 space-y-4" onSubmit={createSingleShift}>
+            <h2 className="text-lg font-semibold">Add Single Shift</h2>
+            <p className="text-sm text-slate-600">
+              Pick a template to auto-fill the shift, then change the date or details before saving.
+            </p>
 
-          <div>
-            <Label htmlFor="shiftType">Shift template</Label>
-            <select
-              id="shiftType"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={newShiftTypeId}
-              onChange={(e) => fillFromShiftType(e.target.value)}
+            <div>
+              <Label htmlFor="shiftType">Shift template</Label>
+              <select
+                id="shiftType"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={newShiftTypeId}
+                onChange={(e) => fillFromShiftType(e.target.value)}
+              >
+                <option value="">Custom shift</option>
+                {shiftTypes.map((type) => (
+                  <option key={type.id} value={type.id}>
+                    {type.name} · {type.start_time}-{type.end_time}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="shiftDate">Date</Label>
+                <Input
+                  id="shiftDate"
+                  type="date"
+                  value={newShiftDate}
+                  onChange={(e) => setNewShiftDate(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="requiredWorkers">Required workers</Label>
+                <Input
+                  id="requiredWorkers"
+                  type="number"
+                  min="1"
+                  value={newShiftRequiredWorkers}
+                  onChange={(e) => setNewShiftRequiredWorkers(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="shiftLabel">Shift label</Label>
+              <Input
+                id="shiftLabel"
+                value={newShiftLabel}
+                onChange={(e) => setNewShiftLabel(e.target.value)}
+                placeholder="Morning Shift"
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="startTime">Start time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={newShiftStart}
+                  onChange={(e) => setNewShiftStart(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="endTime">End time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={newShiftEnd}
+                  onChange={(e) => setNewShiftEnd(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <Button type="submit">Add Shift</Button>
+          </form>
+
+          <div className="rounded-lg border bg-white p-6 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold">Apply Shift Across Multiple Dates</h2>
+              <p className="mt-1 text-sm text-slate-600">
+                Use the same template and details across several dates in one click.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label>Selected dates</Label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {selectedBulkDates.length === 0 ? (
+                    <span className="text-sm text-slate-500">No dates selected yet.</span>
+                  ) : (
+                    selectedBulkDates.map((date) => (
+                      <span
+                        key={date}
+                        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+                      >
+                        {formatWeekday(date)} · {date}
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSelectedBulkDates([])}
+                  disabled={selectedBulkDates.length === 0}
+                >
+                  Clear Selected Dates
+                </Button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7">
+              {calendarDates.map((date) => {
+                const selected = selectedBulkDates.includes(date)
+                return (
+                  <Button
+                    key={date}
+                    type="button"
+                    variant={selected ? "default" : "outline"}
+                    className="h-auto flex-col py-3"
+                    onClick={() => toggleBulkDate(date)}
+                  >
+                    <span className="text-xs uppercase tracking-wide">{formatWeekday(date)}</span>
+                    <span className="mt-1 text-xs">{date}</span>
+                  </Button>
+                )
+              })}
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => void createBulkShifts()}
+              disabled={
+                bulkCreating ||
+                selectedBulkDates.length === 0 ||
+                !newShiftLabel ||
+                !newShiftStart ||
+                !newShiftEnd
+              }
             >
-              <option value="">Custom shift</option>
-              {shiftTypes.map((type) => (
-                <option key={type.id} value={type.id}>
-                  {type.name} · {type.start_time}-{type.end_time}
-                </option>
-              ))}
-            </select>
+              {bulkCreating ? "Creating..." : "Apply Shift to Selected Dates"}
+            </Button>
           </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label htmlFor="shiftDate">Date</Label>
-              <Input
-                id="shiftDate"
-                type="date"
-                value={newShiftDate}
-                onChange={(e) => setNewShiftDate(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="requiredWorkers">Required workers</Label>
-              <Input
-                id="requiredWorkers"
-                type="number"
-                min="1"
-                value={newShiftRequiredWorkers}
-                onChange={(e) => setNewShiftRequiredWorkers(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <Label htmlFor="shiftLabel">Shift label</Label>
-            <Input
-              id="shiftLabel"
-              value={newShiftLabel}
-              onChange={(e) => setNewShiftLabel(e.target.value)}
-              placeholder="Morning Shift"
-              required
-            />
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label htmlFor="startTime">Start time</Label>
-              <Input
-                id="startTime"
-                type="time"
-                value={newShiftStart}
-                onChange={(e) => setNewShiftStart(e.target.value)}
-                required
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="endTime">End time</Label>
-              <Input
-                id="endTime"
-                type="time"
-                value={newShiftEnd}
-                onChange={(e) => setNewShiftEnd(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <Button type="submit">Add Shift</Button>
-        </form>
+        </div>
       ) : null}
 
       {viewMode === "calendar" ? (

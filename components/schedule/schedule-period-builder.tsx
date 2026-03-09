@@ -263,17 +263,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     [members, shifts, assignments],
   )
 
-  const understaffedShiftCount = useMemo(
-    () =>
-      shifts.filter((shift) => {
-        const assignedCount = (groupedAssignments[shift.id] || []).filter(
-          (assignment) => assignment.status !== "dropped",
-        ).length
-        return assignedCount < shift.required_workers
-      }).length,
-    [shifts, groupedAssignments],
-  )
-
   const selectedShift = useMemo(
     () => shifts.find((shift) => shift.id === selectedShiftId) || null,
     [shifts, selectedShiftId],
@@ -598,7 +587,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     const availability = availabilityByShift[shift.id]
     const availablePeople = availability?.available || []
     const assignedCount = assigned.length
-    const understaffed = assignedCount < shift.required_workers
     const selected = selectedShiftId === shift.id
 
     return (
@@ -625,18 +613,10 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
             <div className="text-sm font-semibold text-slate-900">
               {assignedCount}/{shift.required_workers} filled
             </div>
-            <div
-              className={`mt-1 rounded-full px-2 py-1 text-xs font-medium ${
-                understaffed ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
-              }`}
-            >
-              {understaffed ? "Understaffed" : "Covered"}
+            <div className="mt-1 text-xs text-slate-500">
+              {availablePeople.length} available • {availability?.noResponseCount || 0} no response
             </div>
           </div>
-        </div>
-
-        <div className="mt-4 text-xs font-medium text-slate-500">
-          {availablePeople.length} available • {availability?.noResponseCount || 0} no response
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
@@ -1012,7 +992,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         </div>
 
         {isManager ? (
-          <ManagerInsightsPanel loads={employeeLoads} understaffedShiftCount={understaffedShiftCount} />
+          <ManagerInsightsPanel loads={employeeLoads} />
         ) : null}
       </div>
     </div>

@@ -116,6 +116,13 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [selectedBulkDates, setSelectedBulkDates] = useState<string[]>([])
   const [manualNames, setManualNames] = useState<Record<string, string>>({})
   const [selectedShiftId, setSelectedShiftId] = useState<string | null>(null)
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  const [editShiftDate, setEditShiftDate] = useState("")
+  const [editShiftLabel, setEditShiftLabel] = useState("")
+  const [editShiftStart, setEditShiftStart] = useState("")
+  const [editShiftEnd, setEditShiftEnd] = useState("")
+  const [editShiftRequiredWorkers, setEditShiftRequiredWorkers] = useState("1")
+  const [editShiftColor, setEditShiftColor] = useState("#2563EB")
 
   async function loadData() {
     if (!organization) {
@@ -323,6 +330,28 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     setSelectedBulkDates([])
   }
 
+
+  function startEditingShift(shift: Shift) {
+    setEditingShiftId(shift.id)
+    setSelectedShiftId(shift.id)
+    setEditShiftDate(shift.date)
+    setEditShiftLabel(shift.label)
+    setEditShiftStart(shift.start_time)
+    setEditShiftEnd(shift.end_time)
+    setEditShiftRequiredWorkers(String(shift.required_workers || 1))
+    setEditShiftColor(shift.color || "#2563EB")
+  }
+
+  function cancelEditingShift() {
+    setEditingShiftId(null)
+    setEditShiftDate("")
+    setEditShiftLabel("")
+    setEditShiftStart("")
+    setEditShiftEnd("")
+    setEditShiftRequiredWorkers("1")
+    setEditShiftColor("#2563EB")
+  }
+
   function toggleBulkDate(date: string) {
     setSelectedBulkDates((current) =>
       current.includes(date) ? current.filter((item) => item !== date) : [...current, date],
@@ -391,6 +420,48 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
 
     resetShiftForm()
     await loadData()
+  }
+
+  async function saveShiftEdits(event: React.FormEvent) {
+    event.preventDefault()
+    if (!editingShiftId) return
+
+    const payload = {
+      date: editShiftDate,
+      label: editShiftLabel,
+      start_time: editShiftStart,
+      end_time: editShiftEnd,
+      required_workers: Number(editShiftRequiredWorkers || "1"),
+      color: editShiftColor || "#2563EB",
+    }
+
+    const { error } = await supabase.from("shifts").update(payload).eq("id", editingShiftId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setShifts((current) => current.map((shift) => (shift.id === editingShiftId ? { ...shift, ...payload } : shift)))
+    cancelEditingShift()
+  }
+
+  async function deleteShift(shiftId: string) {
+    const shift = shifts.find((item) => item.id === shiftId)
+    if (!shift) return
+    if (!window.confirm(`Delete ${shift.label} on ${formatDateReadable(shift.date)}?`)) return
+
+    const { error } = await supabase.from("shifts").delete().eq("id", shiftId)
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setShifts((current) => current.filter((shift) => shift.id !== shiftId))
+    setAssignments((current) => current.filter((assignment) => assignment.shift_id !== shiftId))
+    setAvailabilityResponses((current) => current.filter((response) => response.shift_id !== shiftId))
+
+    if (selectedShiftId === shiftId) setSelectedShiftId(null)
+    if (editingShiftId === shiftId) cancelEditingShift()
   }
 
   async function assignMember(shiftId: string, employeeId: string) {
@@ -592,29 +663,43 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     return (
       <div
         key={shift.id}
-        className={`rounded-2xl border bg-white p-4 shadow-sm transition ${selected ? "ring-2 ring-blue-500" : ""}`}
+        className={`relative overflow-hidden rounded-2xl border bg-white p-4 pl-5 shadow-sm transition ${selected ? "ring-2 ring-blue-500" : ""}`}
       >
+        <span
+          className="absolute inset-y-0 left-0 w-1.5"
+          style={{ backgroundColor: shift.color || "#2563EB" }}
+          aria-hidden="true"
+        />
+
         <div className="flex items-start justify-between gap-3">
           <button
             type="button"
             onClick={() => setSelectedShiftId(shift.id)}
-            className="text-left"
+            className="min-w-0 flex-1 text-left"
           >
-            <div className="flex items-center gap-2">
-              <span
-                className="inline-block h-3 w-3 rounded-full"
-                style={{ backgroundColor: shift.color || "#2563EB" }}
-              />
-              <h4 className="font-semibold text-slate-900">{shift.label}</h4>
-            </div>
+            <h4 className="truncate font-semibold text-slate-900">{shift.label}</h4>
             <p className="mt-1 text-sm text-slate-500">{formatTimeRange(shift.start_time, shift.end_time)}</p>
           </button>
-          <div className="text-right">
-            <div className="text-sm font-semibold text-slate-900">
-              {assignedCount}/{shift.required_workers} filled
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              {availablePeople.length} available • {availability?.noResponseCount || 0} no response
+
+          <div className="flex items-start gap-3">
+            {isManager && period?.status !== "published" ? (
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => startEditingShift(shift)}>
+                  Edit
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => void deleteShift(shift.id)}>
+                  Delete
+                </Button>
+              </div>
+            ) : null}
+
+            <div className="text-right">
+              <div className="text-sm font-semibold text-slate-900">
+                {assignedCount}/{shift.required_workers} filled
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                {availablePeople.length} available • {availability?.noResponseCount || 0} no response
+              </div>
             </div>
           </div>
         </div>
@@ -895,6 +980,76 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               </div>
             </div>
           </div>
+
+          {editingShiftId ? (
+            <div className="rounded-3xl border bg-white p-5 shadow-sm">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Edit Shift</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Update the selected shift without leaving the builder.
+                  </p>
+                </div>
+                <Button type="button" variant="outline" onClick={cancelEditingShift}>
+                  Cancel
+                </Button>
+              </div>
+
+              <form className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" onSubmit={saveShiftEdits}>
+                <div>
+                  <Label className="mb-2 block">Date</Label>
+                  <Input type="date" value={editShiftDate} onChange={(event) => setEditShiftDate(event.target.value)} required />
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">Required workers</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={editShiftRequiredWorkers}
+                    onChange={(event) => setEditShiftRequiredWorkers(event.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">Shift color</Label>
+                  <input
+                    type="color"
+                    value={editShiftColor}
+                    onChange={(event) => setEditShiftColor(event.target.value)}
+                    className="h-11 w-16 rounded border"
+                  />
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">Shift label</Label>
+                  <Input
+                    value={editShiftLabel}
+                    onChange={(event) => setEditShiftLabel(event.target.value)}
+                    placeholder="Morning Shift"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">Start time</Label>
+                  <Input type="time" value={editShiftStart} onChange={(event) => setEditShiftStart(event.target.value)} required />
+                </div>
+
+                <div>
+                  <Label className="mb-2 block">End time</Label>
+                  <Input type="time" value={editShiftEnd} onChange={(event) => setEditShiftEnd(event.target.value)} required />
+                </div>
+
+                <div className="flex items-end gap-2 xl:col-span-3">
+                  <Button type="submit">Save Shift Changes</Button>
+                  <Button type="button" variant="outline" onClick={() => editingShiftId && void deleteShift(editingShiftId)}>
+                    Delete Shift
+                  </Button>
+                </div>
+              </form>
+            </div>
+          ) : null}
 
           {selectedShift ? (
             <div className="rounded-3xl border bg-white p-5 shadow-sm">

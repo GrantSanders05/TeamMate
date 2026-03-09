@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { OrgBrandHeader } from "@/components/organization/org-brand-header"
 
 type Period = {
   id: string
@@ -62,31 +63,29 @@ export function ManagerDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-6">
-        <h1 className="text-2xl font-semibold">{organization.name}</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Manager overview for schedules, drop requests, and active planning periods.
-        </p>
-      </div>
+      <OrgBrandHeader
+        title={organization.name}
+        subtitle="Manager overview for schedules, staffing, and drop requests."
+      />
 
       <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border bg-white p-5">
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
           <div className="text-sm text-slate-500">Active Periods</div>
           <div className="mt-2 text-3xl font-bold text-slate-900">{activePeriods.length}</div>
         </div>
 
-        <div className="rounded-lg border bg-white p-5">
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
           <div className="text-sm text-slate-500">Pending Drop Requests</div>
           <div className="mt-2 text-3xl font-bold text-slate-900">{pendingDrops}</div>
         </div>
 
-        <div className="rounded-lg border bg-white p-5">
+        <div className="rounded-xl border bg-white p-5 shadow-sm">
           <div className="text-sm text-slate-500">All Schedule Periods</div>
           <div className="mt-2 text-3xl font-bold text-slate-900">{periods.length}</div>
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-6">
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Quick Actions</h2>
@@ -107,7 +106,7 @@ export function ManagerDashboard() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-6">
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Recent Schedule Periods</h2>
 
         {periods.length === 0 ? (
@@ -117,7 +116,7 @@ export function ManagerDashboard() {
             {periods.slice(0, 5).map((period) => (
               <div
                 key={period.id}
-                className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
+                className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
               >
                 <div>
                   <div className="font-medium text-slate-900">{period.name}</div>

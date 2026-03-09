@@ -1,42 +1,66 @@
 "use client"
 
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
+import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 
-export function TopBar({ userEmail }: { userEmail: string }) {
-  const router = useRouter()
+export function TopBar() {
   const supabase = createClient()
-  const { organization, memberships, isLoading } = useOrgSafe()
+  const { organization } = useOrgSafe()
 
-  async function handleSignOut() {
+  async function signOut() {
     await supabase.auth.signOut()
-    router.push("/login")
-    router.refresh()
+    window.location.href = "/login"
   }
 
-  const orgName = isLoading
-    ? "Loading..."
-    : organization?.name ?? "No organization"
+  const logoUrl = organization?.logo_url || null
+  const brandColor = organization?.primary_color || "#2563EB"
 
   return (
-    <header className="border-b px-4 py-3 flex justify-between items-center">
-      <div>
-        <div className="text-xs text-gray-500">Active organization</div>
-        <div className="font-semibold">{orgName}</div>
-      </div>
+    <header className="sticky top-0 z-40 border-b bg-white/95 backdrop-blur">
+      <div className="flex min-h-[64px] items-center justify-between gap-3 px-4 py-3 md:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div
+            className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-slate-50"
+            style={{ borderColor: brandColor }}
+          >
+            {logoUrl ? (
+              <img src={logoUrl} alt={`${organization?.name || "Organization"} logo`} className="h-full w-full object-cover" />
+            ) : (
+              <div
+                className="flex h-full w-full items-center justify-center text-sm font-semibold text-white"
+                style={{ backgroundColor: brandColor }}
+              >
+                {(organization?.name || "O").slice(0, 1).toUpperCase()}
+              </div>
+            )}
+          </div>
 
-      <div className="flex gap-2 items-center">
-        {memberships.length > 1 && (
-          <Button onClick={() => router.push("/select-org")}>
-            Switch Org
-          </Button>
-        )}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold text-slate-900 md:text-base">
+              {organization?.name || "TeamMate"}
+            </div>
+            <div className="hidden text-xs text-slate-500 md:block">
+              Scheduling made simple
+            </div>
+          </div>
+        </div>
 
-        <Button variant="outline" onClick={handleSignOut}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/profile"
+            className="rounded-lg border px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Profile
+          </Link>
+          <button
+            onClick={() => void signOut()}
+            className="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white"
+            type="button"
+          >
+            Sign Out
+          </button>
+        </div>
       </div>
     </header>
   )

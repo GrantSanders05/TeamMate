@@ -4,143 +4,181 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
-import { useOrg } from "@/lib/hooks/use-organization"
-import type { SchedulingPeriod } from "@/lib/types"
+import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { OrgBrandHeader } from "@/components/organization/org-brand-header"
 
-interface UpcomingShift {
+type Period = {
   id: string
-  shift_id: string
+  name: string
+  start_date: string
+  end_date: string
   status: string
-  shifts: {
-    id: string
-    label: string
-    date: string
-    start_time: string
-    end_time: string
-    scheduling_period_id: string
-  } | null
+}
+
+type MyShift = {
+  shift_id: string
+  label: string
+  date: string
+  start_time: string
+  end_time: string
+  period_id: string
+  period_name: string
 }
 
 export function EmployeeDashboard() {
   const supabase = createClient()
-  const { organization, member } = useOrg()
-  const [collectingPeriods, setCollectingPeriods] = useState<SchedulingPeriod[]>([])
-  const [upcomingShifts, setUpcomingShifts] = useState<UpcomingShift[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { organization, member } = useOrgSafe()
+
+  const [collectingPeriods, setCollectingPeriods] = useState<Period[]>([])
+  const [myShifts, setMyShifts] = useState<MyShift[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    if (!organization || !member) return
-
     async function loadDashboard() {
-      setIsLoading(true)
+      if (!organization || !member?.user_id) {
+        setLoading(false)
+        return
+      }
 
-      const [{ data: periods }, { data: assignments }] = await Promise.all([
-        supabase
-          .from("scheduling_periods")
-          .select("*")
-          .eq("organization_id", organization.id)
-          .eq("status", "collecting")
-          .order("start_date", { ascending: true }),
-        supabase
-          .from("shift_assignments")
-          .select("id, shift_id, status, shifts(id, label, date, start_time, end_time, scheduling_period_id)")
-          .eq("employee_id", member.user_id)
-          .eq("status", "assigned")
-          .order("assigned_at", { ascending: false })
-          .limit(10),
-      ])
+      const { data: periodsData } = await supabase
+        .from("scheduling_periods")
+        .select("id, name, start_date, end_date, status")
+        .eq("organization_id", organization.id)
+        .eq("status", "collecting")
+        .order("start_date", { ascending: true })
 
-      setCollectingPeriods((periods as SchedulingPeriod[]) ?? [])
-      setUpcomingShifts((assignments as UpcomingShift[]) ?? [])
-      setIsLoading(false)
+      const { data: publishedPeriods } = await supabase
+        .from("scheduling_periods")
+        .select("id, name, start_date, end_date, status")
+        .eq("organization_id", organization.id)
+        .eq("status", "published")
+
+      let loadedShifts: MyShift[] = []
+
+      if ((publishedPeriods || []).length > 0) {
+        const publishedIds = (publishedPeriods || []).map((p: any) => p.id)
+
+        const { data: shiftsData } = await supabase
+          .from("shifts")
+          .select("id, label, date, start_time, end_time, scheduling_period_id")
+          .in("scheduling_period_id", publishedIds)
+
+        const shiftIds = (shiftsData || []).map((shift: any) => shift.id)
+
+        if (shiftIds.length > 0) {
+          const { data: assignmentData } = await supabase
+            .from("shift_assignments")
+            .select("shift_id, employee_id, status")
+            .eq("employee_id", member.user_id)
+            .eq("status", "assigned")
+            .in("shift_id", shiftIds)
+
+          const assignedShiftIds = new Set((assignmentData || []).map((a: any) => a.shift_id))
+
+          loadedShifts = (shiftsData || [])
+            .filter((shift: any) => assignedShiftIds.has(shift.id))
+            .map((shift: any) => {
+              const period = (publishedPeriods || []).find((p: any) => p.id === shift.scheduling_period_id)
+              return {
+                shift_id: shift.id,
+                label: shift.label,
+                date: shift.date,
+                start_time: shift.start_time,
+                end_time: shift.end_time,
+                period_id: shift.scheduling_period_id,
+                period_name: period?.name || "Published Period",
+              }
+            })
+            .sort((a, b) => `${a.date} ${a.start_time}`.localeCompare(`${b.date} ${b.start_time}`))
+        }
+      }
+
+      setCollectingPeriods((periodsData as Period[]) || [])
+      setMyShifts(loadedShifts)
+      setLoading(false)
     }
 
     void loadDashboard()
-  }, [organization, member, supabase])
+  }, [organization?.id, member?.user_id])
+
+  if (!organization) {
+    return <div className="rounded-lg border bg-white p-6">No organization selected.</div>
+  }
+
+  if (loading) {
+    return <div className="rounded-lg border bg-white p-6">Loading dashboard...</div>
+  }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="text-sm font-medium text-slate-500">Employee dashboard</div>
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
-          {organization?.name || "Organization"}
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-slate-600">
-          See open availability periods, track your assignments, and stay on top of your schedule.
-        </p>
+      <OrgBrandHeader
+        title={organization.name}
+        subtitle="Your team schedule, upcoming shifts, and availability in one place."
+      />
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border bg-white p-6 shadow-sm">
+          <div className="text-sm text-slate-500">Open Availability Periods</div>
+          <div className="mt-2 text-3xl font-bold text-slate-900">{collectingPeriods.length}</div>
+        </div>
+
+        <div className="rounded-xl border bg-white p-6 shadow-sm">
+          <div className="text-sm text-slate-500">Upcoming Assigned Shifts</div>
+          <div className="mt-2 text-3xl font-bold text-slate-900">{myShifts.length}</div>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr]">
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-900">Available periods</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Submit your availability for any period currently open for responses.
-          </p>
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-semibold">Available Shifts</h2>
 
+        {collectingPeriods.length === 0 ? (
+          <div className="mt-4 text-sm text-slate-600">No open availability periods right now.</div>
+        ) : (
           <div className="mt-4 space-y-3">
-            {isLoading ? (
-              <div className="text-sm text-slate-500">Loading periods...</div>
-            ) : collectingPeriods.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-600">
-                There are no open availability periods right now.
-              </div>
-            ) : (
-              collectingPeriods.map((period) => (
-                <div key={period.id} className="rounded-lg border border-slate-200 p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="font-medium text-slate-900">{period.name}</div>
-                      <div className="mt-1 text-sm text-slate-500">
-                        {period.start_date} → {period.end_date}
-                      </div>
-                    </div>
-
-                    <Button asChild size="sm">
-                      <Link href={`/availability/${period.id}`}>Submit Availability</Link>
-                    </Button>
+            {collectingPeriods.map((period) => (
+              <div
+                key={period.id}
+                className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
+              >
+                <div>
+                  <div className="font-medium text-slate-900">{period.name}</div>
+                  <div className="mt-1 text-sm text-slate-600">
+                    {period.start_date} → {period.end_date}
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-slate-900">My upcoming shifts</h2>
-            <Button asChild variant="ghost" size="sm">
-              <Link href="/my-schedule">View all</Link>
-            </Button>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {isLoading ? (
-              <div className="text-sm text-slate-500">Loading shifts...</div>
-            ) : upcomingShifts.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 p-6 text-sm text-slate-600">
-                No assigned shifts yet.
+                <Button asChild>
+                  <Link href={`/availability/${period.id}`}>Submit Availability</Link>
+                </Button>
               </div>
-            ) : (
-              upcomingShifts.map((assignment) => (
-                <div key={assignment.id} className="rounded-lg border border-slate-200 p-4">
-                  <div className="font-medium text-slate-900">
-                    {assignment.shifts?.label || "Shift"}
-                  </div>
-                  <div className="mt-1 text-sm text-slate-500">
-                    {assignment.shifts?.date} · {assignment.shifts?.start_time} - {assignment.shifts?.end_time}
-                  </div>
-                  <div className="mt-3">
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/my-schedule/${assignment.shifts?.scheduling_period_id || ""}`}>
-                        View Period
-                      </Link>
-                    </Button>
-                  </div>
-                </div>
-              ))
-            )}
+            ))}
           </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold">My Upcoming Shifts</h2>
+          <Button asChild variant="outline">
+            <Link href="/my-schedule">Open Full Schedule</Link>
+          </Button>
         </div>
+
+        {myShifts.length === 0 ? (
+          <div className="mt-4 text-sm text-slate-600">No upcoming published shifts assigned yet.</div>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {myShifts.slice(0, 5).map((shift) => (
+              <div key={shift.shift_id} className="rounded-xl border p-4">
+                <div className="font-medium text-slate-900">{shift.label}</div>
+                <div className="mt-1 text-sm text-slate-600">
+                  {shift.date} · {shift.start_time} - {shift.end_time}
+                </div>
+                <div className="mt-1 text-xs text-slate-500">{shift.period_name}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

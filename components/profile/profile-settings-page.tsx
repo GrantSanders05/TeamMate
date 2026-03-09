@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { OrgBrandHeader } from "@/components/organization/org-brand-header"
 
 type MembershipRow = {
   id: string
@@ -189,16 +190,14 @@ export function ProfileSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-6">
-        <h1 className="text-2xl font-semibold">Profile</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Update your account details, change your password, and see the organizations you belong to.
-        </p>
-      </div>
+      <OrgBrandHeader
+        title={organization ? `${organization.name} Profile` : "Profile"}
+        subtitle="Manage your account details, password, and organization presence."
+      />
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-semibold">Account Details</h2>
 
             <div>
@@ -241,7 +240,7 @@ export function ProfileSettingsPage() {
             </Button>
           </div>
 
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-semibold">Change Password</h2>
 
             <div>
@@ -273,11 +272,11 @@ export function ProfileSettingsPage() {
         </div>
 
         <aside className="space-y-6">
-          <div className="rounded-lg border bg-white p-6">
+          <div className="rounded-xl border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">Current Organization</h2>
 
             {organization ? (
-              <div className="mt-4 rounded-lg border bg-slate-50 p-4">
+              <div className="mt-4 rounded-xl border bg-slate-50 p-4">
                 <div className="font-medium text-slate-900">{organization.name}</div>
                 <div className="mt-1 text-sm text-slate-600">
                   Join code: {organization.join_code}
@@ -288,7 +287,7 @@ export function ProfileSettingsPage() {
             )}
           </div>
 
-          <div className="rounded-lg border bg-white p-6">
+          <div className="rounded-xl border bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold">My Organizations</h2>
 
             {memberships.length === 0 ? (
@@ -296,7 +295,7 @@ export function ProfileSettingsPage() {
             ) : (
               <div className="mt-4 space-y-3">
                 {memberships.map((membership) => (
-                  <div key={membership.id} className="rounded-lg border p-4">
+                  <div key={membership.id} className="rounded-xl border p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium text-slate-900">

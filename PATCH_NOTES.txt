@@ -1,0 +1,9 @@
+This hotfix targets production-build failures during page data collection/static generation.
+
+Included fixes:
+1. Keeps type/lint skipping enabled in next.config.js.
+2. Forces the authenticated app layout to render dynamically.
+3. Rewrites login page to remove useSearchParams.
+4. Rewrites signup page into a clean, minimal client page.
+
+Replace the matching files in the repo with these versions, commit, and redeploy.

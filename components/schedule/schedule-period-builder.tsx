@@ -157,6 +157,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [selectedBulkDates, setSelectedBulkDates] = useState<string[]>([])
   const [bulkCreating, setBulkCreating] = useState(false)
   const [manualNames, setManualNames] = useState<Record<string, string>>({})
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  const [editShiftDate, setEditShiftDate] = useState("")
+  const [editShiftLabel, setEditShiftLabel] = useState("")
+  const [editShiftStart, setEditShiftStart] = useState("")
+  const [editShiftEnd, setEditShiftEnd] = useState("")
+  const [editShiftRequiredWorkers, setEditShiftRequiredWorkers] = useState("1")
 
   async function loadData() {
     if (!organization) {
@@ -661,7 +667,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     return (
       <div
         key={shift.id}
-        className="rounded-lg border p-3"
+        className="rounded-xl border bg-white p-3 shadow-sm"
         style={{ borderLeftWidth: "6px", borderLeftColor: shift.color || "#3B82F6" }}
       >
         <div className="font-medium text-slate-900">{shift.label}</div>
@@ -675,7 +681,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         {isManager && period?.status !== "published" ? (
           <div className="mt-3 space-y-2">
             <select
-              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               defaultValue=""
               onChange={(e) => {
                 if (!e.target.value) return
@@ -709,7 +715,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
             </div>
 
             <select
-              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               defaultValue=""
               onChange={(e) => {
                 if (!e.target.value) return
@@ -773,56 +779,58 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-6">
+    <div className="space-y-4 md:space-y-6">
+      <div className="rounded-xl border bg-white p-4 shadow-sm md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">{period.name}</h1>
+            <h1 className="text-xl font-semibold md:text-2xl">{period.name}</h1>
             <p className="mt-1 text-sm text-slate-600">
               {formatDateReadable(period.start_date)} – {formatDateReadable(period.end_date)} · {period.status}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
             <Button
               type="button"
               variant={viewMode === "calendar" ? "default" : "outline"}
+              className="w-full"
               onClick={() => setViewMode("calendar")}
             >
-              Weekly Calendar
+              Calendar
             </Button>
             <Button
               type="button"
               variant={viewMode === "list" ? "default" : "outline"}
+              className="w-full"
               onClick={() => setViewMode("list")}
             >
-              List View
+              List
             </Button>
-            <Button type="button" variant="outline" onClick={exportSchedule}>
-              Export / Print
+            <Button type="button" variant="outline" className="w-full" onClick={exportSchedule}>
+              Export
             </Button>
 
             {isManager ? (
               <>
                 {period.status === "draft" ? (
-                  <Button onClick={() => void updateStatus("collecting")}>Open for Availability</Button>
+                  <Button className="w-full sm:w-auto" onClick={() => void updateStatus("collecting")}>Open</Button>
                 ) : null}
                 {period.status === "collecting" ? (
                   <>
-                    <Button variant="outline" onClick={copyAvailabilityLink}>Copy Availability Link</Button>
-                    <Button onClick={() => void updateStatus("scheduling")}>Close Availability</Button>
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={copyAvailabilityLink}>Link</Button>
+                    <Button className="w-full sm:w-auto" onClick={() => void updateStatus("scheduling")}>Close</Button>
                   </>
                 ) : null}
                 {period.status === "scheduling" ? (
-                  <Button onClick={() => void updateStatus("published")}>Publish Schedule</Button>
+                  <Button className="w-full sm:w-auto" onClick={() => void updateStatus("published")}>Publish</Button>
                 ) : null}
                 {period.status === "published" ? (
                   <>
-                    <Button variant="outline" onClick={() => void updateStatus("scheduling")}>
-                      Unpublish for Editing
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={() => void updateStatus("scheduling")}>
+                      Unpublish
                     </Button>
-                    <Button variant="outline" onClick={() => void archivePeriod()}>
-                      Archive Period
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={() => void archivePeriod()}>
+                      Archive
                     </Button>
                   </>
                 ) : null}
@@ -832,18 +840,18 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         </div>
       </div>
 
-      <div className={isManager ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
-        <div className="space-y-6">
+      <div className={isManager ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
+        <div className="space-y-4 md:space-y-6">
           {isManager ? (
             <>
-              <form className="rounded-lg border bg-white p-6 space-y-4" onSubmit={createSingleShift}>
+              <form className="rounded-xl border bg-white p-4 shadow-sm md:p-6 space-y-4" onSubmit={createSingleShift}>
                 <h2 className="text-lg font-semibold">Add Single Shift</h2>
 
                 <div>
                   <Label htmlFor="shiftType">Shift template</Label>
                   <select
                     id="shiftType"
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    className="mt-1 flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={newShiftTypeId}
                     onChange={(e) => fillFromShiftType(e.target.value)}
                   >
@@ -856,7 +864,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   </select>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="shiftDate">Date</Label>
                     <Input
@@ -891,7 +899,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="startTime">Start time</Label>
                     <Input
@@ -915,41 +923,25 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   </div>
                 </div>
 
-                <Button type="submit">Add Shift</Button>
+                <Button className="w-full sm:w-auto" type="submit">Add Shift</Button>
               </form>
 
-              <div className="rounded-lg border bg-white p-6 space-y-4">
+              <div className="rounded-xl border bg-white p-4 shadow-sm md:p-6 space-y-4">
                 <h2 className="text-lg font-semibold">Apply Shift Across Multiple Dates</h2>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Selected dates</Label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {selectedBulkDates.length === 0 ? (
-                        <span className="text-sm text-slate-500">No dates selected yet.</span>
-                      ) : (
-                        selectedBulkDates.map((date) => (
-                          <span
-                            key={date}
-                            className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
-                          >
-                            {formatDateReadable(date)}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setSelectedBulkDates([])}
-                      disabled={selectedBulkDates.length === 0}
-                    >
-                      Clear Selected Dates
-                    </Button>
-                  </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedBulkDates.length === 0 ? (
+                    <span className="text-sm text-slate-500">No dates selected yet.</span>
+                  ) : (
+                    selectedBulkDates.map((date) => (
+                      <span
+                        key={date}
+                        className="rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+                      >
+                        {formatDateReadable(date)}
+                      </span>
+                    ))
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-4 lg:grid-cols-7">
@@ -960,45 +952,59 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                         key={date}
                         type="button"
                         variant={selected ? "default" : "outline"}
-                        className="h-auto flex-col py-3"
+                        className="h-auto min-h-[56px] flex-col py-3"
                         onClick={() => toggleBulkDate(date)}
                       >
-                        <span className="text-xs uppercase tracking-wide">{formatWeekday(date)}</span>
-                        <span className="mt-1 text-xs">{formatDateReadable(date)}</span>
+                        <span className="text-[11px] uppercase tracking-wide">{formatWeekday(date)}</span>
+                        <span className="mt-1 text-[11px] leading-tight">{formatDateReadable(date)}</span>
                       </Button>
                     )
                   })}
                 </div>
 
-                <Button
-                  type="button"
-                  onClick={() => void createBulkShifts()}
-                  disabled={
-                    bulkCreating ||
-                    selectedBulkDates.length === 0 ||
-                    !newShiftLabel ||
-                    !newShiftStart ||
-                    !newShiftEnd
-                  }
-                >
-                  {bulkCreating ? "Creating..." : "Apply Shift to Selected Dates"}
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full sm:w-auto"
+                    onClick={() => setSelectedBulkDates([])}
+                    disabled={selectedBulkDates.length === 0}
+                  >
+                    Clear Dates
+                  </Button>
+
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto"
+                    onClick={() => void createBulkShifts()}
+                    disabled={
+                      bulkCreating ||
+                      selectedBulkDates.length === 0 ||
+                      !newShiftLabel ||
+                      !newShiftStart ||
+                      !newShiftEnd
+                    }
+                  >
+                    {bulkCreating ? "Creating..." : "Apply to Selected Dates"}
+                  </Button>
+                </div>
               </div>
             </>
           ) : null}
 
           {viewMode === "calendar" ? (
-            <div className="rounded-lg border bg-white p-6">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
-              </div>
+            <>
+              <div className="rounded-xl border bg-white p-4 shadow-sm md:hidden">
+                <div className="mb-3">
+                  <h2 className="text-lg font-semibold">Schedule by Day</h2>
+                  <p className="mt-1 text-sm text-slate-600">Mobile day-by-day layout.</p>
+                </div>
 
-              <div className="overflow-x-auto">
-                <div className="grid min-w-[1100px] grid-cols-7 gap-4">
+                <div className="space-y-4">
                   {calendarDates.map((date) => (
-                    <div key={date} className="rounded-lg border bg-slate-50 p-3">
+                    <div key={date} className="rounded-xl border bg-slate-50 p-3">
                       <div className="border-b pb-2">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                           {formatWeekday(date)}
                         </div>
                         <div className="mt-1 text-sm font-medium text-slate-900">
@@ -1019,9 +1025,40 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   ))}
                 </div>
               </div>
-            </div>
+
+              <div className="hidden rounded-xl border bg-white p-6 shadow-sm md:block">
+                <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
+
+                <div className="mt-4 overflow-x-auto">
+                  <div className="grid min-w-[1100px] grid-cols-7 gap-4">
+                    {calendarDates.map((date) => (
+                      <div key={date} className="rounded-lg border bg-slate-50 p-3">
+                        <div className="border-b pb-2">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {formatWeekday(date)}
+                          </div>
+                          <div className="mt-1 text-sm font-medium text-slate-900">
+                            {formatDateReadable(date)}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 space-y-3">
+                          {(shiftsByDate[date] || []).length === 0 ? (
+                            <div className="rounded-lg border border-dashed bg-white p-3 text-xs text-slate-500">
+                              No shifts
+                            </div>
+                          ) : (
+                            (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
           ) : (
-            <div className="rounded-lg border bg-white p-6">
+            <div className="rounded-xl border bg-white p-4 shadow-sm md:p-6">
               <h2 className="text-lg font-semibold">List View</h2>
 
               {shifts.length === 0 ? (
@@ -1039,14 +1076,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
 
         {isManager ? (
           <aside className="space-y-4">
-            <div className="sticky top-4 rounded-lg border bg-white p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Employee Load</h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Live shift counts and hours for this period while you assign work.
-                  </p>
-                </div>
+            <div className="xl:sticky xl:top-4 rounded-xl border bg-white p-4 shadow-sm md:p-5">
+              <div>
+                <h2 className="text-lg font-semibold">Employee Load</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Live shift counts and hours while you assign work.
+                </p>
               </div>
 
               <div className="mt-4">

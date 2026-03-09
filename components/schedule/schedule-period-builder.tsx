@@ -51,10 +51,20 @@ type Assignment = {
   status: string
 }
 
-type AvailabilityCount = {
+type AvailabilityResponse = {
   shift_id: string
-  available_count: number
-  unavailable_count: number
+  employee_id: string
+  status: "available" | "unavailable" | "all_day"
+  notes: string | null
+}
+
+type AvailabilitySummary = {
+  available: Member[]
+  unavailable: Member[]
+  noResponse: Member[]
+  availableCount: number
+  unavailableCount: number
+  noResponseCount: number
 }
 
 export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
@@ -66,7 +76,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [members, setMembers] = useState<Member[]>([])
   const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
-  const [availabilityCounts, setAvailabilityCounts] = useState<Record<string, AvailabilityCount>>({})
+  const [availabilityResponses, setAvailabilityResponses] = useState<AvailabilityResponse[]>([])
   const [loading, setLoading] = useState(true)
 
   const [newShiftDate, setNewShiftDate] = useState("")
@@ -106,16 +116,20 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           .from("shifts")
           .select("id, date, label, start_time, end_time, required_workers, shift_type_id")
           .eq("scheduling_period_id", periodId)
-          .order("date", { ascending: true }),
+          .order("date", { ascending: true })
+          .order("start_time", { ascending: true }),
       ])
 
+    const normalizedMembers = ((memberData as Member[]) || []).filter(
+      (m) => m.role === "employee" || m.role === "manager"
+    )
     const normalizedShifts = (shiftData as Shift[]) || []
+    const shiftIds = normalizedShifts.map((shift) => shift.id)
+
     setPeriod((periodData as Period) || null)
     setShiftTypes((shiftTypeData as ShiftType[]) || [])
-    setMembers(((memberData as Member[]) || []).filter((m) => m.role === "employee" || m.role === "manager"))
+    setMembers(normalizedMembers)
     setShifts(normalizedShifts)
-
-    const shiftIds = normalizedShifts.map((shift) => shift.id)
 
     if (shiftIds.length > 0) {
       const [{ data: assignmentData }, { data: availabilityData }] = await Promise.all([
@@ -125,37 +139,15 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           .in("shift_id", shiftIds),
         supabase
           .from("availability_responses")
-          .select("shift_id, status")
+          .select("shift_id, employee_id, status, notes")
           .in("shift_id", shiftIds),
       ])
 
       setAssignments((assignmentData as Assignment[]) || [])
-
-      const counts = ((availabilityData as { shift_id: string; status: string }[]) || []).reduce<Record<string, AvailabilityCount>>(
-        (acc, row) => {
-          if (!acc[row.shift_id]) {
-            acc[row.shift_id] = {
-              shift_id: row.shift_id,
-              available_count: 0,
-              unavailable_count: 0,
-            }
-          }
-
-          if (row.status === "available" || row.status === "all_day") {
-            acc[row.shift_id].available_count += 1
-          } else if (row.status === "unavailable") {
-            acc[row.shift_id].unavailable_count += 1
-          }
-
-          return acc
-        },
-        {}
-      )
-
-      setAvailabilityCounts(counts)
+      setAvailabilityResponses((availabilityData as AvailabilityResponse[]) || [])
     } else {
       setAssignments([])
-      setAvailabilityCounts({})
+      setAvailabilityResponses([])
     }
 
     setLoading(false)
@@ -172,6 +164,43 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       return acc
     }, {})
   }, [assignments])
+
+  const availabilityByShift = useMemo(() => {
+    const map: Record<string, AvailabilitySummary> = {}
+
+    for (const shift of shifts) {
+      const responsesForShift = availabilityResponses.filter((r) => r.shift_id === shift.id)
+
+      const availableIds = new Set(
+        responsesForShift
+          .filter((r) => r.status === "available" || r.status === "all_day")
+          .map((r) => r.employee_id)
+      )
+
+      const unavailableIds = new Set(
+        responsesForShift
+          .filter((r) => r.status === "unavailable")
+          .map((r) => r.employee_id)
+      )
+
+      const available = members.filter((m) => availableIds.has(m.user_id))
+      const unavailable = members.filter((m) => unavailableIds.has(m.user_id))
+      const noResponse = members.filter(
+        (m) => !availableIds.has(m.user_id) && !unavailableIds.has(m.user_id)
+      )
+
+      map[shift.id] = {
+        available,
+        unavailable,
+        noResponse,
+        availableCount: available.length,
+        unavailableCount: unavailable.length,
+        noResponseCount: noResponse.length,
+      }
+    }
+
+    return map
+  }, [availabilityResponses, members, shifts])
 
   function fillFromShiftType(shiftTypeId: string) {
     setNewShiftTypeId(shiftTypeId)
@@ -214,6 +243,24 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
 
   async function assignMember(shiftId: string, employeeId: string) {
     if (!member?.user_id || !employeeId) return
+
+    const allowedEmployeeIds = new Set(
+      (availabilityByShift[shiftId]?.available || []).map((person) => person.user_id)
+    )
+
+    if (!allowedEmployeeIds.has(employeeId)) {
+      alert("Only employees who marked themselves available can be assigned to this shift.")
+      return
+    }
+
+    const alreadyAssigned = (groupedAssignments[shiftId] || []).some(
+      (assignment) => assignment.employee_id === employeeId && assignment.status === "assigned"
+    )
+
+    if (alreadyAssigned) {
+      alert("That employee is already assigned to this shift.")
+      return
+    }
 
     const { error } = await supabase.from("shift_assignments").insert({
       shift_id: shiftId,
@@ -413,29 +460,38 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           <div className="mt-4 space-y-4">
             {shifts.map((shift) => {
               const assigned = groupedAssignments[shift.id] || []
-              const counts = availabilityCounts[shift.id] || {
-                shift_id: shift.id,
-                available_count: 0,
-                unavailable_count: 0,
+              const availability = availabilityByShift[shift.id] || {
+                available: [],
+                unavailable: [],
+                noResponse: [],
+                availableCount: 0,
+                unavailableCount: 0,
+                noResponseCount: 0,
               }
 
               return (
                 <div key={shift.id} className="rounded-lg border p-4">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <div className="font-medium text-slate-900">
-                        {shift.label}
-                      </div>
+                      <div className="font-medium text-slate-900">{shift.label}</div>
                       <div className="mt-1 text-sm text-slate-600">
                         {shift.date} · {shift.start_time} - {shift.end_time} · {assigned.length}/{shift.required_workers} assigned
                       </div>
-                      <div className="mt-1 text-xs text-slate-500">
-                        {counts.available_count} available · {counts.unavailable_count} unavailable
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                        <span className="rounded-full bg-green-100 px-2.5 py-1 text-green-700">
+                          {availability.availableCount} available
+                        </span>
+                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-red-700">
+                          {availability.unavailableCount} unavailable
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
+                          {availability.noResponseCount} no response
+                        </span>
                       </div>
                     </div>
 
                     {isManager && period.status !== "published" ? (
-                      <div className="w-full md:w-64">
+                      <div className="w-full md:w-72">
                         <select
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           defaultValue=""
@@ -445,42 +501,70 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                             e.currentTarget.value = ""
                           }}
                         >
-                          <option value="">Assign employee</option>
-                          {members.map((employee) => (
-                            <option key={employee.user_id} value={employee.user_id}>
-                              {employee.display_name}
-                            </option>
-                          ))}
+                          <option value="">Assign available employee</option>
+                          {availability.available.length === 0 ? (
+                            <option value="" disabled>No available employees</option>
+                          ) : (
+                            availability.available.map((employee) => (
+                              <option key={employee.user_id} value={employee.user_id}>
+                                {employee.display_name}
+                              </option>
+                            ))
+                          )}
                         </select>
                       </div>
                     ) : null}
                   </div>
 
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {assigned.length === 0 ? (
-                      <span className="text-sm text-slate-500">No one assigned yet.</span>
-                    ) : (
-                      assigned.map((assignment) => {
-                        const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
-                        return (
-                          <div
-                            key={assignment.id}
-                            className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm"
+                  {availability.available.length > 0 ? (
+                    <div className="mt-3">
+                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                        Available Employees
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {availability.available.map((employee) => (
+                          <span
+                            key={employee.user_id}
+                            className="rounded-full bg-green-50 px-3 py-1 text-sm text-green-700"
                           >
-                            <span>{assignedMember?.display_name || assignment.manual_name || "Assigned"}</span>
-                            {isManager && period.status !== "published" ? (
-                              <button
-                                className="text-slate-500 hover:text-red-600"
-                                onClick={() => void unassignMember(assignment.id)}
-                                type="button"
-                              >
-                                ×
-                              </button>
-                            ) : null}
-                          </div>
-                        )
-                      })
-                    )}
+                            {employee.display_name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="mt-3">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Assigned
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {assigned.length === 0 ? (
+                        <span className="text-sm text-slate-500">No one assigned yet.</span>
+                      ) : (
+                        assigned.map((assignment) => {
+                          const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+                          return (
+                            <div
+                              key={assignment.id}
+                              className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm"
+                            >
+                              <span>{assignedMember?.display_name || assignment.manual_name || "Assigned"}</span>
+                              {isManager && period.status !== "published" ? (
+                                <button
+                                  className="text-slate-500 hover:text-red-600"
+                                  onClick={() => void unassignMember(assignment.id)}
+                                  type="button"
+                                >
+                                  ×
+                                </button>
+                              ) : null}
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
                   </div>
                 </div>
               )

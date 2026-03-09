@@ -32,7 +32,6 @@ const employeeItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const { organization, isManager, isLoading } = useOrg()
-
   const navItems = isManager ? managerItems : employeeItems
 
   return (

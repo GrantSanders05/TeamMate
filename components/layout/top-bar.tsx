@@ -18,13 +18,14 @@ export function TopBar({ userEmail }: { userEmail: string }) {
   const supabase = createClient()
   const { organization, memberships, setActiveOrg, refresh, isLoading } = useOrg()
 
+  const safeMemberships = memberships ?? []
+  const initials = userEmail ? userEmail.charAt(0).toUpperCase() : "U"
+
   async function handleSignOut() {
     await supabase.auth.signOut()
     router.push("/login")
     router.refresh()
   }
-
-  const initials = userEmail ? userEmail.charAt(0).toUpperCase() : "U"
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
@@ -44,7 +45,7 @@ export function TopBar({ userEmail }: { userEmail: string }) {
             Refresh
           </Button>
 
-          {memberships.length > 1 ? (
+          {safeMemberships.length > 1 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -53,7 +54,7 @@ export function TopBar({ userEmail }: { userEmail: string }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {memberships.map(({ org }) => (
+                {safeMemberships.map(({ org }) => (
                   <DropdownMenuItem
                     key={org.id}
                     onClick={() => {
@@ -79,7 +80,7 @@ export function TopBar({ userEmail }: { userEmail: string }) {
                 {userEmail || "Profile"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {memberships.length > 1 ? (
+              {safeMemberships.length > 1 ? (
                 <DropdownMenuItem onClick={() => router.push("/select-org")}>
                   Select organization
                 </DropdownMenuItem>

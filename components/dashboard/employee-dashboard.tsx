@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { OrgBrandHeader } from "@/components/organization/org-brand-header"
+import { PageShell } from "@/components/shared/page-shell"
+import { SectionCard } from "@/components/shared/section-card"
 
 type Period = {
   id: string
@@ -110,35 +112,33 @@ export function EmployeeDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       <OrgBrandHeader
         title={organization.name}
         subtitle="Your team schedule, upcoming shifts, and availability in one place."
       />
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <SectionCard className="bg-gradient-to-br from-blue-50 to-white">
           <div className="text-sm text-slate-500">Open Availability Periods</div>
           <div className="mt-2 text-3xl font-bold text-slate-900">{collectingPeriods.length}</div>
-        </div>
+        </SectionCard>
 
-        <div className="rounded-xl border bg-white p-6 shadow-sm">
+        <SectionCard className="bg-gradient-to-br from-emerald-50 to-white">
           <div className="text-sm text-slate-500">Upcoming Assigned Shifts</div>
           <div className="mt-2 text-3xl font-bold text-slate-900">{myShifts.length}</div>
-        </div>
+        </SectionCard>
       </div>
 
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Available Shifts</h2>
-
+      <SectionCard title="Available Shifts">
         {collectingPeriods.length === 0 ? (
-          <div className="mt-4 text-sm text-slate-600">No open availability periods right now.</div>
+          <div className="mt-1 text-sm text-slate-600">No open availability periods right now.</div>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             {collectingPeriods.map((period) => (
               <div
                 key={period.id}
-                className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
+                className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
               >
                 <div>
                   <div className="font-medium text-slate-900">{period.name}</div>
@@ -154,22 +154,20 @@ export function EmployeeDashboard() {
             ))}
           </div>
         )}
-      </div>
+      </SectionCard>
 
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold">My Upcoming Shifts</h2>
+      <SectionCard title="My Upcoming Shifts">
+        <div className="mb-4">
           <Button asChild variant="outline">
             <Link href="/my-schedule">Open Full Schedule</Link>
           </Button>
         </div>
-
         {myShifts.length === 0 ? (
-          <div className="mt-4 text-sm text-slate-600">No upcoming published shifts assigned yet.</div>
+          <div className="text-sm text-slate-600">No upcoming published shifts assigned yet.</div>
         ) : (
-          <div className="mt-4 space-y-3">
+          <div className="space-y-3">
             {myShifts.slice(0, 5).map((shift) => (
-              <div key={shift.shift_id} className="rounded-xl border p-4">
+              <div key={shift.shift_id} className="rounded-2xl border border-slate-200 p-4">
                 <div className="font-medium text-slate-900">{shift.label}</div>
                 <div className="mt-1 text-sm text-slate-600">
                   {shift.date} · {shift.start_time} - {shift.end_time}
@@ -179,7 +177,7 @@ export function EmployeeDashboard() {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </SectionCard>
+    </PageShell>
   )
 }

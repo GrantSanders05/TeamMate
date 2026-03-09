@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { OrgBrandHeader } from "@/components/organization/org-brand-header"
+import { PageShell } from "@/components/shared/page-shell"
+import { SectionCard } from "@/components/shared/section-card"
 
 type Period = {
   id: string
@@ -66,20 +68,13 @@ export function EmployeeAvailabilityHome() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       <OrgBrandHeader
         title={`${organization.name} Availability`}
         subtitle="Open periods where your team is currently collecting availability."
       />
 
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
-        <h1 className="text-xl font-semibold md:text-2xl">Available Shifts</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Choose an active schedule period to submit your availability.
-        </p>
-      </div>
-
-      <div className="rounded-xl border bg-white p-6 shadow-sm">
+      <SectionCard title="Available Shifts" description="Choose an active schedule period to submit your availability.">
         {periods.length === 0 ? (
           <div className="text-sm text-slate-600">
             There are no open availability periods right now.
@@ -89,7 +84,7 @@ export function EmployeeAvailabilityHome() {
             {periods.map((period) => (
               <div
                 key={period.id}
-                className="flex flex-col gap-3 rounded-xl border p-4 md:flex-row md:items-center md:justify-between"
+                className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
               >
                 <div>
                   <div className="font-medium text-slate-900">{period.name}</div>
@@ -105,7 +100,7 @@ export function EmployeeAvailabilityHome() {
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </SectionCard>
+    </PageShell>
   )
 }

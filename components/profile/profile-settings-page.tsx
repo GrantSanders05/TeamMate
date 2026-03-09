@@ -8,6 +8,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { OrgBrandHeader } from "@/components/organization/org-brand-header"
+import { PageShell } from "@/components/shared/page-shell"
+import { SectionCard } from "@/components/shared/section-card"
 
 type MembershipRow = {
   id: string
@@ -189,7 +191,7 @@ export function ProfileSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PageShell>
       <OrgBrandHeader
         title={organization ? `${organization.name} Profile` : "Profile"}
         subtitle="Manage your account details, password, and organization presence."
@@ -197,105 +199,101 @@ export function ProfileSettingsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold">Account Details</h2>
+          <SectionCard title="Account Details">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="profileEmail">Email</Label>
+                <Input id="profileEmail" value={email} disabled />
+              </div>
 
-            <div>
-              <Label htmlFor="profileEmail">Email</Label>
-              <Input id="profileEmail" value={email} disabled />
+              <div>
+                <Label htmlFor="profileName">Full name</Label>
+                <Input
+                  id="profileName"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  placeholder="Your name"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="profileAvatar">Avatar / photo URL</Label>
+                <Input
+                  id="profileAvatar"
+                  value={avatarUrl}
+                  onChange={(e) => setAvatarUrl(e.target.value)}
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="profileBio">Short bio</Label>
+                <Textarea
+                  id="profileBio"
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="A short note about you"
+                />
+              </div>
+
+              <Button onClick={() => void saveProfile()} disabled={savingProfile}>
+                {savingProfile ? "Saving..." : "Save Profile"}
+              </Button>
             </div>
+          </SectionCard>
 
-            <div>
-              <Label htmlFor="profileName">Full name</Label>
-              <Input
-                id="profileName"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Your name"
-              />
+          <SectionCard title="Change Password">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="newPassword">New password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="New password"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="confirmPassword">Confirm new password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm password"
+                />
+              </div>
+
+              <Button variant="outline" onClick={() => void updatePassword()} disabled={savingPassword}>
+                {savingPassword ? "Updating..." : "Update Password"}
+              </Button>
             </div>
-
-            <div>
-              <Label htmlFor="profileAvatar">Avatar / photo URL</Label>
-              <Input
-                id="profileAvatar"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://..."
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="profileBio">Short bio</Label>
-              <Textarea
-                id="profileBio"
-                value={bio}
-                onChange={(e) => setBio(e.target.value)}
-                placeholder="A short note about you"
-              />
-            </div>
-
-            <Button onClick={() => void saveProfile()} disabled={savingProfile}>
-              {savingProfile ? "Saving..." : "Save Profile"}
-            </Button>
-          </div>
-
-          <div className="rounded-xl border bg-white p-6 shadow-sm space-y-4">
-            <h2 className="text-lg font-semibold">Change Password</h2>
-
-            <div>
-              <Label htmlFor="newPassword">New password</Label>
-              <Input
-                id="newPassword"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="New password"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="confirmPassword">Confirm new password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm password"
-              />
-            </div>
-
-            <Button variant="outline" onClick={() => void updatePassword()} disabled={savingPassword}>
-              {savingPassword ? "Updating..." : "Update Password"}
-            </Button>
-          </div>
+          </SectionCard>
         </div>
 
         <aside className="space-y-6">
-          <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">Current Organization</h2>
-
+          <SectionCard title="Current Organization">
             {organization ? (
-              <div className="mt-4 rounded-xl border bg-slate-50 p-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="font-medium text-slate-900">{organization.name}</div>
                 <div className="mt-1 text-sm text-slate-600">
                   Join code: {organization.join_code}
                 </div>
               </div>
             ) : (
-              <div className="mt-4 text-sm text-slate-500">No organization selected.</div>
+              <div className="text-sm text-slate-500">No organization selected.</div>
             )}
-          </div>
+          </SectionCard>
 
-          <div className="rounded-xl border bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold">My Organizations</h2>
-
+          <SectionCard title="My Organizations">
             {memberships.length === 0 ? (
-              <div className="mt-4 text-sm text-slate-500">You are not in any organizations yet.</div>
+              <div className="text-sm text-slate-500">You are not in any organizations yet.</div>
             ) : (
-              <div className="mt-4 space-y-3">
+              <div className="space-y-3">
                 {memberships.map((membership) => (
-                  <div key={membership.id} className="rounded-xl border p-4">
+                  <div key={membership.id} className="rounded-2xl border border-slate-200 p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium text-slate-900">
@@ -324,9 +322,9 @@ export function ProfileSettingsPage() {
                 ))}
               </div>
             )}
-          </div>
+          </SectionCard>
         </aside>
       </div>
-    </div>
+    </PageShell>
   )
 }

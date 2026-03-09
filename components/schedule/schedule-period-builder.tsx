@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { Pencil, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -669,24 +670,46 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         />
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="relative min-w-0 pr-16">
             <button
               type="button"
               onClick={() => setSelectedShiftId(shift.id)}
-              className="min-w-0 flex-1 text-left"
+              className="block min-w-0 w-full text-left"
             >
-              <h4 className="text-sm font-semibold leading-5 text-slate-900 break-words sm:text-base">{shift.label}</h4>
-              <p className="mt-1 text-sm text-slate-500">{formatTimeRange(shift.start_time, shift.end_time)}</p>
+              <h4 className="truncate text-base font-semibold leading-6 text-slate-900">
+                {shift.label}
+              </h4>
+              <p className="mt-1 whitespace-nowrap text-sm font-medium text-slate-500">
+                {formatTimeRange(shift.start_time, shift.end_time)}
+              </p>
             </button>
 
             {isManager && period?.status !== "published" ? (
-              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                <Button type="button" variant="outline" size="sm" onClick={() => startEditingShift(shift)}>
-                  Edit
-                </Button>
-                <Button type="button" variant="outline" size="sm" onClick={() => void deleteShift(shift.id)}>
-                  Delete
-                </Button>
+              <div className="absolute right-0 top-0 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    startEditingShift(shift)
+                  }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+                  aria-label={`Edit ${shift.label}`}
+                  title="Edit shift"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void deleteShift(shift.id)
+                  }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 hover:text-red-600"
+                  aria-label={`Delete ${shift.label}`}
+                  title="Delete shift"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               </div>
             ) : null}
           </div>
@@ -729,7 +752,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           {isManager && period?.status !== "published" ? (
             <div className="mt-4 space-y-3 border-t pt-4">
               <div>
-                <Label className="mb-2 block">Assign available employee</Label>
+                <Label className="mb-2 block text-sm">Assign available employee</Label>
                 <select
                   className="w-full rounded-xl border bg-white px-3 py-2 text-sm"
                   defaultValue=""
@@ -749,7 +772,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               </div>
 
               <div>
-                <Label className="mb-2 block">Manual write-in</Label>
+                <Label className="mb-2 block text-sm">Manual write-in</Label>
                 <div className="flex gap-2">
                   <Input
                     value={manualNames[shift.id] || ""}
@@ -757,6 +780,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                       setManualNames((current) => ({ ...current, [shift.id]: event.target.value }))
                     }
                     placeholder="Write in name"
+                    className="min-w-0"
                   />
                   <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
                     Add

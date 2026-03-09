@@ -5,11 +5,13 @@ export function DraggableShiftCard({
   label,
   timeLabel,
   assignedCount,
+  children,
 }: {
   shiftId: string
   label: string
   timeLabel: string
   assignedCount: string
+  children?: React.ReactNode
 }) {
   return (
     <div
@@ -22,6 +24,7 @@ export function DraggableShiftCard({
       <div className="font-medium text-slate-900">{label}</div>
       <div className="mt-1 text-xs text-slate-600">{timeLabel}</div>
       <div className="mt-2 text-xs text-slate-500">{assignedCount}</div>
+      {children ? <div className="mt-3">{children}</div> : null}
     </div>
   )
 }

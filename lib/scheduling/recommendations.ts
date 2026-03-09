@@ -95,7 +95,5 @@ export function recommendEmployeesForShift({
 
   const loads = computeEmployeeLoads(employees, shifts, assignments)
 
-  return loads
-    .filter((employee) => availableIds.has(employee.user_id))
-    .slice(0, limit)
+  return loads.filter((employee) => availableIds.has(employee.user_id)).slice(0, limit)
 }

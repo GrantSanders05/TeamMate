@@ -25,7 +25,6 @@ const employeeItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const { isManager, organization } = useOrgSafe()
-
   const items = isManager ? managerItems : employeeItems
   const brandColor = organization?.primary_color || "#2563EB"
   const secondary = organization?.secondary_color || "#1E40AF"

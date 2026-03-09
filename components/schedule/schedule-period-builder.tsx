@@ -148,7 +148,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
 
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
   const [employeeSearch, setEmployeeSearch] = useState("")
-
   const [newShiftDate, setNewShiftDate] = useState("")
   const [newShiftTypeId, setNewShiftTypeId] = useState("")
   const [newShiftLabel, setNewShiftLabel] = useState("")
@@ -158,12 +157,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [selectedBulkDates, setSelectedBulkDates] = useState<string[]>([])
   const [bulkCreating, setBulkCreating] = useState(false)
   const [manualNames, setManualNames] = useState<Record<string, string>>({})
-  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
-  const [editShiftDate, setEditShiftDate] = useState("")
-  const [editShiftLabel, setEditShiftLabel] = useState("")
-  const [editShiftStart, setEditShiftStart] = useState("")
-  const [editShiftEnd, setEditShiftEnd] = useState("")
-  const [editShiftRequiredWorkers, setEditShiftRequiredWorkers] = useState("1")
 
   async function loadData() {
     if (!organization) {
@@ -294,13 +287,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     return getDatesInRange(period.start_date, period.end_date)
   }, [period])
 
-  const understaffedShiftCount = useMemo(() => {
-    return shifts.filter((shift) => {
-      const assigned = (groupedAssignments[shift.id] || []).filter((a) => a.status !== "dropped")
-      return assigned.length < shift.required_workers
-    }).length
-  }, [shifts, groupedAssignments])
-
   const employeeLoads = useMemo(() => {
     const shiftMap = new Map(shifts.map((shift) => [shift.id, shift]))
     const base = members.map<EmployeeLoad>((person) => ({
@@ -336,12 +322,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       employee.display_name.toLowerCase().includes(query)
     )
   }, [employeeLoads, employeeSearch])
-
-  function getLoadTone(hours: number, shiftCount: number) {
-    if (hours >= 35 || shiftCount >= 5) return "bg-red-100 text-red-700"
-    if (hours >= 20 || shiftCount >= 3) return "bg-amber-100 text-amber-700"
-    return "bg-green-100 text-green-700"
-  }
 
   function fillFromShiftType(shiftTypeId: string) {
     setNewShiftTypeId(shiftTypeId)
@@ -464,64 +444,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       required_workers: shift.required_workers,
       color: shift.color || "#3B82F6",
     })
-
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    await loadData()
-  }
-
-  function startEditingShift(shift: Shift) {
-    setEditingShiftId(shift.id)
-    setEditShiftDate(shift.date)
-    setEditShiftLabel(shift.label)
-    setEditShiftStart(shift.start_time)
-    setEditShiftEnd(shift.end_time)
-    setEditShiftRequiredWorkers(String(shift.required_workers))
-  }
-
-  function cancelEditingShift() {
-    setEditingShiftId(null)
-    setEditShiftDate("")
-    setEditShiftLabel("")
-    setEditShiftStart("")
-    setEditShiftEnd("")
-    setEditShiftRequiredWorkers("1")
-  }
-
-  async function saveEditedShift() {
-    if (!editingShiftId) return
-
-    const { error } = await supabase
-      .from("shifts")
-      .update({
-        date: editShiftDate,
-        label: editShiftLabel,
-        start_time: editShiftStart,
-        end_time: editShiftEnd,
-        required_workers: Number(editShiftRequiredWorkers || "1"),
-      })
-      .eq("id", editingShiftId)
-
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    cancelEditingShift()
-    await loadData()
-  }
-
-  async function deleteShift(shiftId: string) {
-    const confirmed = window.confirm("Delete this shift?")
-    if (!confirmed) return
-
-    const { error } = await supabase
-      .from("shifts")
-      .delete()
-      .eq("id", shiftId)
 
     if (error) {
       alert(error.message)
@@ -654,6 +576,51 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     await loadData()
   }
 
+  async function archivePeriod() {
+    if (!period || !organization || !member?.user_id) return
+
+    const confirmed = window.confirm("Archive this period and move it to History?")
+    if (!confirmed) return
+
+    const snapshot = {
+      period,
+      shifts,
+      assignments,
+      members: members.map((person) => ({
+        id: person.id,
+        user_id: person.user_id,
+        display_name: person.display_name,
+      })),
+    }
+
+    const { error: archiveError } = await supabase
+      .from("schedule_archives")
+      .insert({
+        scheduling_period_id: period.id,
+        organization_id: organization.id,
+        snapshot_data: snapshot,
+        archived_by: member.user_id,
+      })
+
+    if (archiveError) {
+      alert(archiveError.message)
+      return
+    }
+
+    const { error: periodError } = await supabase
+      .from("scheduling_periods")
+      .update({ status: "archived" })
+      .eq("id", period.id)
+
+    if (periodError) {
+      alert(periodError.message)
+      return
+    }
+
+    alert("Schedule archived.")
+    await loadData()
+  }
+
   async function copyAvailabilityLink() {
     if (!period || typeof window === "undefined") return
     const token = period.availability_link_token || ""
@@ -691,148 +658,104 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       noResponseCount: 0,
     }
 
-    const isEditing = editingShiftId === shift.id
-
     return (
       <div
         key={shift.id}
         className="rounded-lg border p-3"
         style={{ borderLeftWidth: "6px", borderLeftColor: shift.color || "#3B82F6" }}
       >
-        {isEditing ? (
-          <div className="space-y-3">
-            <Input type="date" value={editShiftDate} onChange={(e) => setEditShiftDate(e.target.value)} />
-            <Input value={editShiftLabel} onChange={(e) => setEditShiftLabel(e.target.value)} placeholder="Shift label" />
-            <div className="grid grid-cols-2 gap-2">
-              <Input type="time" value={editShiftStart} onChange={(e) => setEditShiftStart(e.target.value)} />
-              <Input type="time" value={editShiftEnd} onChange={(e) => setEditShiftEnd(e.target.value)} />
-            </div>
-            <Input
-              type="number"
-              min="1"
-              value={editShiftRequiredWorkers}
-              onChange={(e) => setEditShiftRequiredWorkers(e.target.value)}
-            />
+        <div className="font-medium text-slate-900">{shift.label}</div>
+        <div className="mt-1 text-xs text-slate-600">
+          {formatTimeRange(shift.start_time, shift.end_time)}
+        </div>
+        <div className="mt-1 text-xs text-slate-500">
+          {assigned.length}/{shift.required_workers} assigned · {availability.availableCount} available
+        </div>
+
+        {isManager && period?.status !== "published" ? (
+          <div className="mt-3 space-y-2">
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+              defaultValue=""
+              onChange={(e) => {
+                if (!e.target.value) return
+                void assignMember(shift.id, e.target.value)
+                e.currentTarget.value = ""
+              }}
+            >
+              <option value="">Assign available</option>
+              {availability.available.length === 0 ? (
+                <option value="" disabled>No available employees</option>
+              ) : (
+                availability.available.map((employee) => (
+                  <option key={employee.user_id} value={employee.user_id}>
+                    {employee.display_name}
+                  </option>
+                ))
+              )}
+            </select>
+
             <div className="flex gap-2">
-              <Button type="button" size="sm" onClick={() => void saveEditedShift()}>
-                Save
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={cancelEditingShift}>
-                Cancel
+              <Input
+                value={manualNames[shift.id] || ""}
+                onChange={(e) =>
+                  setManualNames((prev) => ({ ...prev, [shift.id]: e.target.value }))
+                }
+                placeholder="Write in name"
+              />
+              <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
+                Add
               </Button>
             </div>
+
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+              defaultValue=""
+              onChange={(e) => {
+                if (!e.target.value) return
+                void duplicateShiftToDate(shift, e.target.value)
+                e.currentTarget.value = ""
+              }}
+            >
+              <option value="">Duplicate to another date</option>
+              {calendarDates
+                .filter((date) => date !== shift.date)
+                .map((date) => (
+                  <option key={date} value={date}>
+                    {formatDateReadable(date)}
+                  </option>
+                ))}
+            </select>
           </div>
-        ) : (
-          <>
-            <div className="font-medium text-slate-900">{shift.label}</div>
-            <div className="mt-1 text-xs text-slate-600">
-              {formatTimeRange(shift.start_time, shift.end_time)}
-            </div>
-            <div className="mt-1 text-xs text-slate-500">
-              {assigned.length}/{shift.required_workers} assigned · {availability.availableCount} available
-            </div>
+        ) : null}
 
-            {assigned.length < shift.required_workers ? (
-              <div className="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
-                Understaffed
-              </div>
-            ) : null}
+        {assigned.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {assigned.map((assignment) => {
+              const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+              const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
+              const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
 
-            {isManager && period?.status !== "published" ? (
-              <div className="mt-3 space-y-2">
-                <select
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (!e.target.value) return
-                    void assignMember(shift.id, e.target.value)
-                    e.currentTarget.value = ""
-                  }}
+              return (
+                <div
+                  key={assignment.id}
+                  className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs"
                 >
-                  <option value="">Assign available</option>
-                  {availability.available.length === 0 ? (
-                    <option value="" disabled>No available employees</option>
-                  ) : (
-                    availability.available.map((employee) => (
-                      <option key={employee.user_id} value={employee.user_id}>
-                        {employee.display_name}
-                      </option>
-                    ))
-                  )}
-                </select>
-
-                <div className="flex gap-2">
-                  <Input
-                    value={manualNames[shift.id] || ""}
-                    onChange={(e) =>
-                      setManualNames((prev) => ({ ...prev, [shift.id]: e.target.value }))
-                    }
-                    placeholder="Write in name"
-                  />
-                  <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
-                    Add
-                  </Button>
-                </div>
-
-                <select
-                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-                  defaultValue=""
-                  onChange={(e) => {
-                    if (!e.target.value) return
-                    void duplicateShiftToDate(shift, e.target.value)
-                    e.currentTarget.value = ""
-                  }}
-                >
-                  <option value="">Duplicate to another date</option>
-                  {calendarDates
-                    .filter((date) => date !== shift.date)
-                    .map((date) => (
-                      <option key={date} value={date}>
-                        {formatDateReadable(date)}
-                      </option>
-                    ))}
-                </select>
-
-                <div className="flex gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => startEditingShift(shift)}>
-                    Edit Shift
-                  </Button>
-                  <Button type="button" variant="destructive" size="sm" onClick={() => void deleteShift(shift.id)}>
-                    Delete Shift
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-
-            {assigned.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {assigned.map((assignment) => {
-                  const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
-                  const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
-                  const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
-
-                  return (
-                    <div
-                      key={assignment.id}
-                      className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs"
+                  <span className={isManual ? "italic text-slate-700" : ""}>{displayName}</span>
+                  {isManager && period?.status !== "published" ? (
+                    <button
+                      className="text-slate-500 hover:text-red-600"
+                      onClick={() => void unassignMember(assignment.id)}
+                      type="button"
                     >
-                      <span className={isManual ? "italic text-slate-700" : ""}>{displayName}</span>
-                      {isManager && period?.status !== "published" ? (
-                        <button
-                          className="text-slate-500 hover:text-red-600"
-                          onClick={() => void unassignMember(assignment.id)}
-                          type="button"
-                        >
-                          ×
-                        </button>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-            ) : null}
-          </>
-        )}
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -858,11 +781,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
             <p className="mt-1 text-sm text-slate-600">
               {formatDateReadable(period.start_date)} – {formatDateReadable(period.end_date)} · {period.status}
             </p>
-            {understaffedShiftCount > 0 ? (
-              <div className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-                {understaffedShiftCount} understaffed shift{understaffedShiftCount === 1 ? "" : "s"}
-              </div>
-            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -899,9 +817,14 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   <Button onClick={() => void updateStatus("published")}>Publish Schedule</Button>
                 ) : null}
                 {period.status === "published" ? (
-                  <Button variant="outline" onClick={() => void updateStatus("scheduling")}>
-                    Unpublish for Editing
-                  </Button>
+                  <>
+                    <Button variant="outline" onClick={() => void updateStatus("scheduling")}>
+                      Unpublish for Editing
+                    </Button>
+                    <Button variant="outline" onClick={() => void archivePeriod()}>
+                      Archive Period
+                    </Button>
+                  </>
                 ) : null}
               </>
             ) : null}
@@ -912,12 +835,9 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       <div className={isManager ? "grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]" : ""}>
         <div className="space-y-6">
           {isManager ? (
-            <div className="space-y-6">
+            <>
               <form className="rounded-lg border bg-white p-6 space-y-4" onSubmit={createSingleShift}>
                 <h2 className="text-lg font-semibold">Add Single Shift</h2>
-                <p className="text-sm text-slate-600">
-                  Pick a template to auto-fill the shift, then change the date or details before saving.
-                </p>
 
                 <div>
                   <Label htmlFor="shiftType">Shift template</Label>
@@ -999,12 +919,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               </form>
 
               <div className="rounded-lg border bg-white p-6 space-y-4">
-                <div>
-                  <h2 className="text-lg font-semibold">Apply Shift Across Multiple Dates</h2>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Use the same template and details across several dates in one click.
-                  </p>
-                </div>
+                <h2 className="text-lg font-semibold">Apply Shift Across Multiple Dates</h2>
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
@@ -1069,16 +984,13 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   {bulkCreating ? "Creating..." : "Apply Shift to Selected Dates"}
                 </Button>
               </div>
-            </div>
+            </>
           ) : null}
 
           {viewMode === "calendar" ? (
             <div className="rounded-lg border bg-white p-6">
               <div className="mb-4">
                 <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  Managers can see the schedule organized by day, with shift cards inside each date column.
-                </p>
               </div>
 
               <div className="overflow-x-auto">
@@ -1135,9 +1047,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                     Live shift counts and hours for this period while you assign work.
                   </p>
                 </div>
-                <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                  {employeeLoads.length} employee{employeeLoads.length === 1 ? "" : "s"}
-                </div>
               </div>
 
               <div className="mt-4">
@@ -1154,30 +1063,15 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                 ) : (
                   filteredEmployeeLoads.map((employee) => (
                     <div key={employee.user_id} className="rounded-lg border p-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="font-medium text-slate-900">{employee.display_name}</div>
-                          <div className="mt-1 text-xs text-slate-500">
-                            {employee.role}
-                          </div>
-                        </div>
-                        <div className={`rounded-full px-2.5 py-1 text-xs font-medium ${getLoadTone(employee.hours, employee.shiftCount)}`}>
-                          {employee.hours.toFixed(1)} hrs
-                        </div>
-                      </div>
-
+                      <div className="font-medium text-slate-900">{employee.display_name}</div>
                       <div className="mt-3 grid grid-cols-2 gap-3">
                         <div className="rounded-md bg-slate-50 p-2">
                           <div className="text-[11px] uppercase tracking-wide text-slate-500">Shifts</div>
-                          <div className="mt-1 text-lg font-semibold text-slate-900">
-                            {employee.shiftCount}
-                          </div>
+                          <div className="mt-1 text-lg font-semibold text-slate-900">{employee.shiftCount}</div>
                         </div>
                         <div className="rounded-md bg-slate-50 p-2">
                           <div className="text-[11px] uppercase tracking-wide text-slate-500">Hours</div>
-                          <div className="mt-1 text-lg font-semibold text-slate-900">
-                            {employee.hours.toFixed(1)}
-                          </div>
+                          <div className="mt-1 text-lg font-semibold text-slate-900">{employee.hours.toFixed(1)}</div>
                         </div>
                       </div>
                     </div>

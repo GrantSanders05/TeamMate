@@ -12,7 +12,6 @@ import {
   computeEmployeeLoads,
   recommendEmployeesForShift,
 } from "@/lib/scheduling/recommendations"
-import { ManagerInsightsPanel } from "@/components/schedule/manager-insights-panel"
 
 type Period = {
   id: string
@@ -655,9 +654,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
 
   function renderShiftCard(shift: Shift) {
     const assigned = (groupedAssignments[shift.id] || []).filter((assignment) => assignment.status !== "dropped")
-    const availability = availabilityByShift[shift.id]
-    const availablePeople = availability?.available || []
-    const assignedCount = assigned.length
+    const availablePeople = availabilityByShift[shift.id]?.available || []
     const selected = selectedShiftId === shift.id
 
     return (
@@ -682,95 +679,93 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               <p className="mt-1 text-sm text-slate-500">{formatTimeRange(shift.start_time, shift.end_time)}</p>
             </button>
 
-            <div className="flex flex-wrap items-center gap-2 sm:max-w-[220px] sm:justify-end">
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                {assignedCount}/{shift.required_workers} filled
-              </div>
-
-              {isManager && period?.status !== "published" ? (
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                  <Button type="button" variant="outline" size="sm" onClick={() => startEditingShift(shift)}>
-                    Edit
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => void deleteShift(shift.id)}>
-                    Delete
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-          {assigned.length === 0 ? (
-            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">No one assigned yet</div>
-          ) : (
-            assigned.map((assignment) => {
-              const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
-              const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
-              const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
-
-              return (
-                <div
-                  key={assignment.id}
-                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs ${
-                    isManual ? "bg-slate-100 text-slate-700 italic" : "bg-blue-50 text-blue-700"
-                  }`}
-                >
-                  <span>{displayName}</span>
-                  {isManager && period?.status !== "published" ? (
-                    <button
-                      type="button"
-                      onClick={() => void unassignMember(assignment.id)}
-                      className="font-semibold"
-                    >
-                      ×
-                    </button>
-                  ) : null}
-                </div>
-              )
-            })
-          )}
-        </div>
-
-        {isManager && period?.status !== "published" ? (
-          <div className="mt-4 space-y-3 border-t pt-4">
-            <div>
-              <Label className="mb-2 block">Assign available employee</Label>
-              <select
-                className="w-full rounded-xl border bg-white px-3 py-2 text-sm"
-                defaultValue=""
-                onChange={(event) => {
-                  if (!event.target.value) return
-                  void assignMember(shift.id, event.target.value)
-                  event.currentTarget.value = ""
-                }}
-              >
-                <option value="">Select available employee</option>
-                {availablePeople.map((employee) => (
-                  <option key={employee.user_id} value={employee.user_id}>
-                    {employee.display_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <Label className="mb-2 block">Manual write-in</Label>
-              <div className="flex gap-2">
-                <Input
-                  value={manualNames[shift.id] || ""}
-                  onChange={(event) =>
-                    setManualNames((current) => ({ ...current, [shift.id]: event.target.value }))
-                  }
-                  placeholder="Write in name"
-                />
-                <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
-                  Add
+            {isManager && period?.status !== "published" ? (
+              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                <Button type="button" variant="outline" size="sm" onClick={() => startEditingShift(shift)}>
+                  Edit
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => void deleteShift(shift.id)}>
+                  Delete
                 </Button>
               </div>
-            </div>
+            ) : null}
           </div>
-        ) : null}
+
+          <div className="mt-1 flex flex-wrap gap-2">
+            {assigned.length === 0 ? (
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-500">No one assigned yet</div>
+            ) : (
+              assigned.map((assignment) => {
+                const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+                const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
+                const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
+
+                return (
+                  <div
+                    key={assignment.id}
+                    className={`inline-flex max-w-full items-center gap-2 rounded-full px-3 py-1 text-xs ${
+                      isManual ? "bg-slate-100 text-slate-700 italic" : "bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    <span className="truncate">{displayName}</span>
+                    {isManager && period?.status !== "published" ? (
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void unassignMember(assignment.id)
+                        }}
+                        className="font-semibold"
+                      >
+                        ×
+                      </button>
+                    ) : null}
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          {isManager && period?.status !== "published" ? (
+            <div className="mt-4 space-y-3 border-t pt-4">
+              <div>
+                <Label className="mb-2 block">Assign available employee</Label>
+                <select
+                  className="w-full rounded-xl border bg-white px-3 py-2 text-sm"
+                  defaultValue=""
+                  onChange={(event) => {
+                    if (!event.target.value) return
+                    void assignMember(shift.id, event.target.value)
+                    event.currentTarget.value = ""
+                  }}
+                >
+                  <option value="">Select available employee</option>
+                  {availablePeople.map((employee) => (
+                    <option key={employee.user_id} value={employee.user_id}>
+                      {employee.display_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <Label className="mb-2 block">Manual write-in</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={manualNames[shift.id] || ""}
+                    onChange={(event) =>
+                      setManualNames((current) => ({ ...current, [shift.id]: event.target.value }))
+                    }
+                    placeholder="Write in name"
+                  />
+                  <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
+                    Add
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
       </div>
     )
   }
@@ -1142,9 +1137,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           )}
         </div>
 
-        {isManager ? (
-          <ManagerInsightsPanel loads={employeeLoads} />
-        ) : null}
       </div>
     </div>
   )

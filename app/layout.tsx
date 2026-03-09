@@ -1,53 +1,21 @@
-import type { Metadata } from "next"
-import { DM_Sans, Inter, Outfit, Plus_Jakarta_Sans } from "next/font/google"
-
 import "./globals.css"
-import { Toaster } from "@/components/ui/toaster"
+import { Plus_Jakarta_Sans } from "next/font/google"
 
-const inter = Inter({
+const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
+  variable: "--font-jakarta",
 })
 
-const plusJakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-plus-jakarta",
-  display: "swap",
-})
-
-const dmSans = DM_Sans({
-  subsets: ["latin"],
-  variable: "--font-dm-sans",
-  display: "swap",
-})
-
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
-  display: "swap",
-})
-
-export const metadata: Metadata = {
-  title: "Teammate — Employee Scheduling Made Simple",
-  description:
-    "Create shifts, collect availability, and build your team schedule — all in one place.",
+export const metadata = {
+  title: "TeamMate",
+  description: "Employee scheduling",
 }
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode
-}>) {
+export default function RootLayout({ children }) {
   return (
-    <html
-      lang="en"
-      className={`${inter.variable} ${plusJakarta.variable} ${dmSans.variable} ${outfit.variable}`}
-      suppressHydrationWarning
-    >
-      <body className="font-outfit antialiased">
+    <html lang="en" className={jakarta.variable}>
+      <body className="font-sans">
         {children}
-        <Toaster />
       </body>
     </html>
   )

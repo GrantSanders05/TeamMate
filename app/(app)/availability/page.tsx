@@ -1,8 +1,12 @@
-export default function Page() {
+
+"use client"
+
+import { AvailabilityManager } from "@/components/schedule/availability-manager"
+
+export default function AvailabilityPage(){
   return (
-    <div className="rounded-xl border bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-bold">Availability</h1>
-      <p className="mt-2 text-sm text-slate-600">Availability index route stabilized for a clean build.</p>
+    <div className="space-y-6">
+      <AvailabilityManager />
     </div>
   )
 }

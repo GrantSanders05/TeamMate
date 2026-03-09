@@ -94,10 +94,14 @@ export function CreateOrganizationForm() {
   }
 
   async function uploadLogo(userId: string) {
-    if (!logoFile) return logoUrl.trim() || null
+    if (!logoFile) {
+      return logoUrl.trim() || null
+    }
 
     const ext = logoFile.name.split(".").pop()?.toLowerCase() || "png"
-    const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+    const filePath = `${userId}/${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2)}.${ext}`
 
     const { error } = await supabase.storage
       .from("org-logos")
@@ -121,27 +125,28 @@ export function CreateOrganizationForm() {
     e.preventDefault()
     setLoading(true)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "Please log in and try again.",
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-
     try {
-      const [{ data: profile }, slug, joinCode, uploadedLogoUrl] = await Promise.all([
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
-        generateUniqueSlug(name),
-        generateUniqueJoinCode(),
-        uploadLogo(user.id),
-      ])
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
+
+      if (userError || !user) {
+        throw new Error(userError?.message || "Please log in and try again.")
+      }
+
+      const {
+        data: profile,
+        error: profileError,
+      } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+
+      if (profileError) {
+        throw new Error(profileError.message)
+      }
+
+      const slug = await generateUniqueSlug(name)
+      const joinCode = await generateUniqueJoinCode()
+      const uploadedLogoUrl = await uploadLogo(user.id)
 
       const { data: organization, error: orgError } = await supabase
         .from("organizations")
@@ -160,31 +165,21 @@ export function CreateOrganizationForm() {
         .single()
 
       if (orgError || !organization) {
-        toast({
-          title: "Could not create organization",
-          description: orgError?.message || "Unknown error",
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
+        throw new Error(orgError?.message || "Could not create organization.")
       }
 
-      const { error: memberError } = await supabase.from("organization_members").insert({
-        organization_id: organization.id,
-        user_id: user.id,
-        role: "manager",
-        display_name: profile?.full_name || user.email || "Manager",
-        is_active: true,
-      })
+      const { error: memberError } = await supabase
+        .from("organization_members")
+        .insert({
+          organization_id: organization.id,
+          user_id: user.id,
+          role: "manager",
+          display_name: profile.full_name || user.email || "Manager",
+          is_active: true,
+        })
 
       if (memberError) {
-        toast({
-          title: "Organization created, but membership failed",
-          description: memberError.message,
-          variant: "destructive",
-        })
-        setLoading(false)
-        return
+        throw new Error(memberError.message)
       }
 
       await refresh()
@@ -202,11 +197,9 @@ export function CreateOrganizationForm() {
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
+    } finally {
       setLoading(false)
-      return
     }
-
-    setLoading(false)
   }
 
   return (
@@ -238,6 +231,7 @@ export function CreateOrganizationForm() {
               onChange={(e) => setPrimaryColor(e.target.value)}
             />
           </div>
+
           <div>
             <Label htmlFor="secondaryColor">Secondary color</Label>
             <Input
@@ -295,9 +289,6 @@ export function CreateOrganizationForm() {
               accept="image/*"
               onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
             />
-            <p className="mt-1 text-xs text-slate-500">
-              Upload to the public <code>org-logos</code> bucket.
-            </p>
           </div>
 
           <div>
@@ -319,7 +310,7 @@ export function CreateOrganizationForm() {
 
         <div className="rounded-xl p-4 text-white shadow-sm" style={previewStyle}>
           <div className="flex items-center gap-3">
-            {(logoUrl || logoFile) ? (
+            {logoUrl || logoFile ? (
               <div className="h-12 w-12 overflow-hidden rounded-lg bg-white/20">
                 {logoUrl ? (
                   <img
@@ -339,7 +330,9 @@ export function CreateOrganizationForm() {
               <div className="text-xs uppercase tracking-[0.16em] text-white/80">
                 Brand preview
               </div>
-              <div className="mt-1 text-xl font-semibold">{name || "Your organization"}</div>
+              <div className="mt-1 text-xl font-semibold">
+                {name || "Your organization"}
+              </div>
               <div className="mt-1 text-sm text-white/80">
                 {fontFamily} · {timezone}
               </div>

@@ -24,6 +24,8 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.75rem;
+    --app-font: var(--font-outfit), var(--font-plus-jakarta), system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
 }
 
@@ -36,11 +38,13 @@
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    font-family: var(--app-font);
   }
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    font-family: var(--app-font);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -50,7 +54,8 @@
   input,
   select,
   textarea,
-  optgroup {
+  optgroup,
+  option {
     font: inherit;
     font-family: inherit;
   }
@@ -65,41 +70,46 @@
   }
 }
 
-/* Font family utility classes */
 .font-inter {
-  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 .font-plus-jakarta {
-  font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
 }
 
 .font-dm-sans {
-  font-family: var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 .font-outfit {
-  font-family: var(--font-outfit), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-outfit), var(--font-plus-jakarta), system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Organization-level font override */
 [data-org-font="Inter"] {
-  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-inter), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 [data-org-font="Plus Jakarta Sans"] {
-  font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-plus-jakarta), system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
 }
 
 [data-org-font="DM Sans"] {
-  font-family: var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-dm-sans), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
 [data-org-font="Outfit"] {
-  font-family: var(--font-outfit), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-outfit), var(--font-plus-jakarta), system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
-/* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -118,7 +128,17 @@
   background: #9ca3af;
 }
 
-/* Print styles */
+@supports (-webkit-touch-callout: none) {
+  html,
+  body,
+  button,
+  input,
+  select,
+  textarea {
+    font-family: var(--app-font);
+  }
+}
+
 @media print {
   .no-print {
     display: none !important;

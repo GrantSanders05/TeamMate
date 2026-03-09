@@ -114,6 +114,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [selectedBulkDates, setSelectedBulkDates] = useState<string[]>([])
   const [bulkCreating, setBulkCreating] = useState(false)
   const [manualNames, setManualNames] = useState<Record<string, string>>({})
+  const [editingShiftId, setEditingShiftId] = useState<string | null>(null)
+  const [editShiftDate, setEditShiftDate] = useState("")
+  const [editShiftLabel, setEditShiftLabel] = useState("")
+  const [editShiftStart, setEditShiftStart] = useState("")
+  const [editShiftEnd, setEditShiftEnd] = useState("")
+  const [editShiftRequiredWorkers, setEditShiftRequiredWorkers] = useState("1")
 
   async function loadData() {
     if (!organization) {
@@ -244,6 +250,13 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     return getDatesInRange(period.start_date, period.end_date)
   }, [period])
 
+  const understaffedShiftCount = useMemo(() => {
+    return shifts.filter((shift) => {
+      const assigned = (groupedAssignments[shift.id] || []).filter((a) => a.status !== "dropped")
+      return assigned.length < shift.required_workers
+    }).length
+  }, [shifts, groupedAssignments])
+
   function fillFromShiftType(shiftTypeId: string) {
     setNewShiftTypeId(shiftTypeId)
     const selected = shiftTypes.find((item) => item.id === shiftTypeId)
@@ -344,7 +357,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   async function duplicateShiftToDate(shift: Shift, date: string) {
     const exists = shifts.some(
       (item) =>
-        item.date === date &&
+        item.date == date &&
         item.label === shift.label &&
         item.start_time === shift.start_time &&
         item.end_time === shift.end_time
@@ -365,6 +378,67 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       required_workers: shift.required_workers,
       color: shift.color || "#3B82F6",
     })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    await loadData()
+  }
+
+  function startEditingShift(shift: Shift) {
+    setEditingShiftId(shift.id)
+    setEditShiftDate(shift.date)
+    setEditShiftLabel(shift.label)
+    setEditShiftStart(shift.start_time)
+    setEditShiftEnd(shift.end_time)
+    setEditShiftRequiredWorkers(String(shift.required_workers))
+  }
+
+  function cancelEditingShift() {
+    setEditingShiftId(null)
+    setEditShiftDate("")
+    setEditShiftLabel("")
+    setEditShiftStart("")
+    setEditShiftEnd("")
+    setEditShiftRequiredWorkers("1")
+  }
+
+  async function saveEditedShift() {
+    if (!editingShiftId) return
+
+    const shift = shifts.find((item) => item.id === editingShiftId)
+    if (!shift) return
+
+    const { error } = await supabase
+      .from("shifts")
+      .update({
+        date: editShiftDate,
+        label: editShiftLabel,
+        start_time: editShiftStart,
+        end_time: editShiftEnd,
+        required_workers: Number(editShiftRequiredWorkers || "1"),
+      })
+      .eq("id", editingShiftId)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    cancelEditingShift()
+    await loadData()
+  }
+
+  async function deleteShift(shiftId: string) {
+    const confirmed = window.confirm("Delete this shift?")
+    if (!confirmed) return
+
+    const { error } = await supabase
+      .from("shifts")
+      .delete()
+      .eq("id", shiftId)
 
     if (error) {
       alert(error.message)
@@ -452,12 +526,14 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   async function updateStatus(nextStatus: "collecting" | "scheduling" | "published") {
     if (!period) return
 
-    const updatePayload: Record<string, string> = {
+    const updatePayload: Record<string, string | null> = {
       status: nextStatus,
     }
 
     if (nextStatus === "published") {
       updatePayload.published_at = new Date().toISOString()
+    } else {
+      updatePayload.published_at = null
     }
 
     const { error } = await supabase
@@ -494,6 +570,8 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         user_id: m.user_id,
         display_name: m.display_name,
       })),
+      startDate: period.start_date,
+      endDate: period.end_date,
     })
   }
 
@@ -508,104 +586,148 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       noResponseCount: 0,
     }
 
+    const isEditing = editingShiftId === shift.id
+
     return (
       <div
         key={shift.id}
         className="rounded-lg border p-3"
         style={{ borderLeftWidth: "6px", borderLeftColor: shift.color || "#3B82F6" }}
       >
-        <div className="font-medium text-slate-900">{shift.label}</div>
-        <div className="mt-1 text-xs text-slate-600">
-          {shift.start_time} - {shift.end_time}
-        </div>
-        <div className="mt-1 text-xs text-slate-500">
-          {assigned.length}/{shift.required_workers} assigned · {availability.availableCount} available
-        </div>
-
-        {isManager && period?.status !== "published" ? (
-          <div className="mt-3 space-y-2">
-            <select
-              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-              defaultValue=""
-              onChange={(e) => {
-                if (!e.target.value) return
-                void assignMember(shift.id, e.target.value)
-                e.currentTarget.value = ""
-              }}
-            >
-              <option value="">Assign available</option>
-              {availability.available.length === 0 ? (
-                <option value="" disabled>No available employees</option>
-              ) : (
-                availability.available.map((employee) => (
-                  <option key={employee.user_id} value={employee.user_id}>
-                    {employee.display_name}
-                  </option>
-                ))
-              )}
-            </select>
-
+        {isEditing ? (
+          <div className="space-y-3">
+            <Input type="date" value={editShiftDate} onChange={(e) => setEditShiftDate(e.target.value)} />
+            <Input value={editShiftLabel} onChange={(e) => setEditShiftLabel(e.target.value)} placeholder="Shift label" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="time" value={editShiftStart} onChange={(e) => setEditShiftStart(e.target.value)} />
+              <Input type="time" value={editShiftEnd} onChange={(e) => setEditShiftEnd(e.target.value)} />
+            </div>
+            <Input
+              type="number"
+              min="1"
+              value={editShiftRequiredWorkers}
+              onChange={(e) => setEditShiftRequiredWorkers(e.target.value)}
+            />
             <div className="flex gap-2">
-              <Input
-                value={manualNames[shift.id] || ""}
-                onChange={(e) =>
-                  setManualNames((prev) => ({ ...prev, [shift.id]: e.target.value }))
-                }
-                placeholder="Write in name"
-              />
-              <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
-                Add
+              <Button type="button" size="sm" onClick={() => void saveEditedShift()}>
+                Save
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={cancelEditingShift}>
+                Cancel
               </Button>
             </div>
-
-            <select
-              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
-              defaultValue=""
-              onChange={(e) => {
-                if (!e.target.value) return
-                void duplicateShiftToDate(shift, e.target.value)
-                e.currentTarget.value = ""
-              }}
-            >
-              <option value="">Duplicate to another date</option>
-              {calendarDates
-                .filter((date) => date !== shift.date)
-                .map((date) => (
-                  <option key={date} value={date}>
-                    {formatWeekday(date)} · {date}
-                  </option>
-                ))}
-            </select>
           </div>
-        ) : null}
+        ) : (
+          <>
+            <div className="font-medium text-slate-900">{shift.label}</div>
+            <div className="mt-1 text-xs text-slate-600">
+              {shift.start_time} - {shift.end_time}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">
+              {assigned.length}/{shift.required_workers} assigned · {availability.availableCount} available
+            </div>
 
-        {assigned.length > 0 ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {assigned.map((assignment) => {
-              const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
-              const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
-              const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
+            {assigned.length < shift.required_workers ? (
+              <div className="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-medium text-amber-800">
+                Understaffed
+              </div>
+            ) : null}
 
-              return (
-                <div
-                  key={assignment.id}
-                  className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs"
+            {isManager && period?.status !== "published" ? (
+              <div className="mt-3 space-y-2">
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    void assignMember(shift.id, e.target.value)
+                    e.currentTarget.value = ""
+                  }}
                 >
-                  <span className={isManual ? "italic text-slate-700" : ""}>{displayName}</span>
-                  {isManager && period?.status !== "published" ? (
-                    <button
-                      className="text-slate-500 hover:text-red-600"
-                      onClick={() => void unassignMember(assignment.id)}
-                      type="button"
-                    >
-                      ×
-                    </button>
-                  ) : null}
+                  <option value="">Assign available</option>
+                  {availability.available.length === 0 ? (
+                    <option value="" disabled>No available employees</option>
+                  ) : (
+                    availability.available.map((employee) => (
+                      <option key={employee.user_id} value={employee.user_id}>
+                        {employee.display_name}
+                      </option>
+                    ))
+                  )}
+                </select>
+
+                <div className="flex gap-2">
+                  <Input
+                    value={manualNames[shift.id] || ""}
+                    onChange={(e) =>
+                      setManualNames((prev) => ({ ...prev, [shift.id]: e.target.value }))
+                    }
+                    placeholder="Write in name"
+                  />
+                  <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
+                    Add
+                  </Button>
                 </div>
-              )
-            })}
-          </div>
-        ) : null}
+
+                <select
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (!e.target.value) return
+                    void duplicateShiftToDate(shift, e.target.value)
+                    e.currentTarget.value = ""
+                  }}
+                >
+                  <option value="">Duplicate to another date</option>
+                  {calendarDates
+                    .filter((date) => date !== shift.date)
+                    .map((date) => (
+                      <option key={date} value={date}>
+                        {formatWeekday(date)} · {date}
+                      </option>
+                    ))}
+                </select>
+
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => startEditingShift(shift)}>
+                    Edit Shift
+                  </Button>
+                  <Button type="button" variant="destructive" size="sm" onClick={() => void deleteShift(shift.id)}>
+                    Delete Shift
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {assigned.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {assigned.map((assignment) => {
+                  const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+                  const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
+                  const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
+
+                  return (
+                    <div
+                      key={assignment.id}
+                      className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs"
+                    >
+                      <span className={isManual ? "italic text-slate-700" : ""}>{displayName}</span>
+                      {isManager && period?.status !== "published" ? (
+                        <button
+                          className="text-slate-500 hover:text-red-600"
+                          onClick={() => void unassignMember(assignment.id)}
+                          type="button"
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
+          </>
+        )}
       </div>
     )
   }
@@ -631,6 +753,11 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
             <p className="mt-1 text-sm text-slate-600">
               {period.start_date} → {period.end_date} · {period.status}
             </p>
+            {understaffedShiftCount > 0 ? (
+              <div className="mt-2 inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                {understaffedShiftCount} understaffed shift{understaffedShiftCount === 1 ? "" : "s"}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -665,6 +792,11 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                 ) : null}
                 {period.status === "scheduling" ? (
                   <Button onClick={() => void updateStatus("published")}>Publish Schedule</Button>
+                ) : null}
+                {period.status === "published" ? (
+                  <Button variant="outline" onClick={() => void updateStatus("scheduling")}>
+                    Unpublish for Editing
+                  </Button>
                 ) : null}
               </>
             ) : null}

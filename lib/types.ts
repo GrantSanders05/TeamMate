@@ -80,7 +80,7 @@ export interface Database {
           id: string
           organization_id: string
           user_id: string
-          role: 'manager' | 'employee'
+          role: "manager" | "employee"
           display_name: string
           is_active: boolean
           joined_at: string
@@ -89,13 +89,13 @@ export interface Database {
           id?: string
           organization_id: string
           user_id: string
-          role?: 'manager' | 'employee'
+          role?: "manager" | "employee"
           display_name: string
           is_active?: boolean
           joined_at?: string
         }
         Update: {
-          role?: 'manager' | 'employee'
+          role?: "manager" | "employee"
           display_name?: string
           is_active?: boolean
         }
@@ -136,8 +136,8 @@ export interface Database {
           name: string
           start_date: string
           end_date: string
-          period_type: 'weekly' | 'monthly'
-          status: 'draft' | 'collecting' | 'scheduling' | 'published' | 'archived'
+          period_type: "weekly" | "monthly"
+          status: "draft" | "collecting" | "scheduling" | "published" | "archived"
           availability_link_token: string
           created_by: string | null
           created_at: string
@@ -150,8 +150,8 @@ export interface Database {
           name: string
           start_date: string
           end_date: string
-          period_type: 'weekly' | 'monthly'
-          status?: 'draft' | 'collecting' | 'scheduling' | 'published' | 'archived'
+          period_type: "weekly" | "monthly"
+          status?: "draft" | "collecting" | "scheduling" | "published" | "archived"
           availability_link_token?: string
           created_by?: string | null
           created_at?: string
@@ -162,8 +162,9 @@ export interface Database {
           name?: string
           start_date?: string
           end_date?: string
-          period_type?: 'weekly' | 'monthly'
-          status?: 'draft' | 'collecting' | 'scheduling' | 'published' | 'archived'
+          period_type?: "weekly" | "monthly"
+          status?: "draft" | "collecting" | "scheduling" | "published" | "archived"
+          availability_link_token?: string
           published_at?: string | null
           updated_at?: string
         }
@@ -211,7 +212,7 @@ export interface Database {
           id: string
           shift_id: string
           employee_id: string
-          status: 'available' | 'unavailable' | 'all_day'
+          status: "available" | "unavailable" | "all_day"
           notes: string | null
           submitted_at: string
         }
@@ -219,12 +220,12 @@ export interface Database {
           id?: string
           shift_id: string
           employee_id: string
-          status?: 'available' | 'unavailable' | 'all_day'
+          status?: "available" | "unavailable" | "all_day"
           notes?: string | null
           submitted_at?: string
         }
         Update: {
-          status?: 'available' | 'unavailable' | 'all_day'
+          status?: "available" | "unavailable" | "all_day"
           notes?: string | null
           submitted_at?: string
         }
@@ -236,7 +237,7 @@ export interface Database {
           employee_id: string | null
           manual_name: string | null
           assigned_by: string
-          status: 'assigned' | 'dropped' | 'open'
+          status: "assigned" | "dropped" | "open"
           assigned_at: string
         }
         Insert: {
@@ -245,13 +246,13 @@ export interface Database {
           employee_id?: string | null
           manual_name?: string | null
           assigned_by: string
-          status?: 'assigned' | 'dropped' | 'open'
+          status?: "assigned" | "dropped" | "open"
           assigned_at?: string
         }
         Update: {
           employee_id?: string | null
           manual_name?: string | null
-          status?: 'assigned' | 'dropped' | 'open'
+          status?: "assigned" | "dropped" | "open"
         }
       }
       drop_requests: {
@@ -260,7 +261,7 @@ export interface Database {
           assignment_id: string
           requested_by: string
           reason: string | null
-          status: 'pending' | 'approved' | 'denied'
+          status: "pending" | "approved" | "denied"
           reviewed_by: string | null
           created_at: string
           reviewed_at: string | null
@@ -270,13 +271,13 @@ export interface Database {
           assignment_id: string
           requested_by: string
           reason?: string | null
-          status?: 'pending' | 'approved' | 'denied'
+          status?: "pending" | "approved" | "denied"
           reviewed_by?: string | null
           created_at?: string
           reviewed_at?: string | null
         }
         Update: {
-          status?: 'pending' | 'approved' | 'denied'
+          status?: "pending" | "approved" | "denied"
           reviewed_by?: string | null
           reviewed_at?: string | null
         }
@@ -298,53 +299,61 @@ export interface Database {
           archived_at?: string
           archived_by?: string | null
         }
-        Update: never
+        Update: {
+          snapshot_data?: Json
+          archived_by?: string | null
+        }
       }
     }
   }
 }
 
-// App-level types (more convenient than raw DB types)
-export type Profile = Database['public']['Tables']['profiles']['Row']
-export type Organization = Database['public']['Tables']['organizations']['Row']
-export type OrganizationMember = Database['public']['Tables']['organization_members']['Row']
-export type ShiftType = Database['public']['Tables']['shift_types']['Row']
-export type SchedulingPeriod = Database['public']['Tables']['scheduling_periods']['Row']
-export type Shift = Database['public']['Tables']['shifts']['Row']
-export type AvailabilityResponse = Database['public']['Tables']['availability_responses']['Row']
-export type ShiftAssignment = Database['public']['Tables']['shift_assignments']['Row']
-export type DropRequest = Database['public']['Tables']['drop_requests']['Row']
-export type ScheduleArchive = Database['public']['Tables']['schedule_archives']['Row']
+export type Profile = Database["public"]["Tables"]["profiles"]["Row"]
+export type Organization = Database["public"]["Tables"]["organizations"]["Row"]
+export type OrganizationMember = Database["public"]["Tables"]["organization_members"]["Row"]
+export type ShiftType = Database["public"]["Tables"]["shift_types"]["Row"]
+export type SchedulingPeriod = Database["public"]["Tables"]["scheduling_periods"]["Row"]
+export type Shift = Database["public"]["Tables"]["shifts"]["Row"]
+export type AvailabilityResponse = Database["public"]["Tables"]["availability_responses"]["Row"]
+export type ShiftAssignment = Database["public"]["Tables"]["shift_assignments"]["Row"]
+export type DropRequest = Database["public"]["Tables"]["drop_requests"]["Row"]
+export type ScheduleArchive = Database["public"]["Tables"]["schedule_archives"]["Row"]
 
-// Extended types with joins
-export interface MemberWithProfile extends OrganizationMember {
-  profiles: Profile
+export type UserRole = "manager" | "employee"
+export type PeriodStatus = SchedulingPeriod["status"]
+
+export interface OrganizationMembership {
+  org: Organization
+  member: OrganizationMember
 }
 
-export interface ShiftWithAssignments extends Shift {
-  shift_assignments: (ShiftAssignment & { profiles?: Profile | null })[]
-  availability_responses: AvailabilityResponse[]
-}
-
-export interface DropRequestWithDetails extends DropRequest {
-  profiles: Profile
-  shift_assignments: ShiftAssignment & {
-    shifts: Shift
-    profiles?: Profile | null
-  }
-}
-
-export interface SchedulePeriodWithShifts extends SchedulingPeriod {
-  shifts: ShiftWithAssignments[]
-}
-
-export type PeriodStatus = 'draft' | 'collecting' | 'scheduling' | 'published' | 'archived'
-export type UserRole = 'manager' | 'employee'
-
-export interface OrgContext {
+export interface OrgContextValue {
   organization: Organization | null
   member: OrganizationMember | null
+  memberships: OrganizationMembership[]
   role: UserRole | null
   isManager: boolean
   isLoading: boolean
+  refresh: () => Promise<void>
+  setActiveOrg: (organizationId: string) => void
+}
+
+export interface MemberWithProfile extends OrganizationMember {
+  profile?: Profile | null
+}
+
+export interface ShiftWithRelations extends Shift {
+  shift_type?: ShiftType | null
+  availability_responses?: AvailabilityResponse[]
+  shift_assignments?: ShiftAssignment[]
+}
+
+export interface SchedulingPeriodWithRelations extends SchedulingPeriod {
+  shifts?: ShiftWithRelations[]
+}
+
+export interface DropRequestWithRelations extends DropRequest {
+  assignment?: ShiftAssignment | null
+  requested_by_profile?: Profile | null
+  reviewed_by_profile?: Profile | null
 }

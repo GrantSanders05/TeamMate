@@ -1,35 +1,29 @@
-'use client'
+"use client"
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
   useState,
   type ReactNode,
-} from 'react'
-import { createClient } from '@/lib/supabase/client'
-import type { Organization, OrganizationMember, UserRole } from '@/lib/types'
+} from "react"
+import { ACTIVE_ORG_STORAGE_KEY } from "@/lib/constants"
+import { createClient } from "@/lib/supabase/client"
+import type {
+  OrgContextValue,
+  Organization,
+  OrganizationMember,
+  OrganizationMembership,
+  UserRole,
+} from "@/lib/types"
 
-interface OrgContextType {
-  organization: Organization | null
-  member: OrganizationMember | null
-  role: UserRole | null
-  isManager: boolean
-  isLoading: boolean
-  setActiveOrg: (orgId: string) => void
-  allOrgs: { org: Organization; member: OrganizationMember }[]
+const OrgContext = createContext<OrgContextValue | undefined>(undefined)
+
+interface MembershipQueryRow extends OrganizationMember {
+  organizations: Organization | null
 }
-
-const OrgContext = createContext<OrgContextType>({
-  organization: null,
-  member: null,
-  role: null,
-  isManager: false,
-  isLoading: true,
-  setActiveOrg: () => {},
-  allOrgs: [],
-})
 
 export function OrgProvider({
   children,
@@ -38,89 +32,117 @@ export function OrgProvider({
   children: ReactNode
   userId: string
 }) {
+  const supabase = createClient()
   const [organization, setOrganization] = useState<Organization | null>(null)
   const [member, setMember] = useState<OrganizationMember | null>(null)
-  const [allOrgs, setAllOrgs] = useState<{ org: Organization; member: OrganizationMember }[]>([])
+  const [memberships, setMemberships] = useState<OrganizationMembership[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClient()
 
-  useEffect(() => {
-    let active = true
+  const setActiveOrg = useCallback(
+    (organizationId: string) => {
+      const next = memberships.find((item) => item.org.id === organizationId)
+      if (!next) return
 
-    async function loadOrgs() {
-      setIsLoading(true)
+      setOrganization(next.org)
+      setMember(next.member)
 
-      const { data: memberships } = await supabase
-        .from('organization_members')
-        .select('*, organizations(*)')
-        .eq('user_id', userId)
-        .eq('is_active', true)
-
-      if (!active) return
-
-      if (!memberships || memberships.length === 0) {
-        setAllOrgs([])
-        setOrganization(null)
-        setMember(null)
-        setIsLoading(false)
-        return
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId)
       }
+    },
+    [memberships]
+  )
 
-      const mapped = memberships
-        .map((m) => ({
-          org: m.organizations as Organization | null,
-          member: m as unknown as OrganizationMember,
-        }))
-        .filter((item): item is { org: Organization; member: OrganizationMember } => Boolean(item.org))
+  const refresh = useCallback(async () => {
+    setIsLoading(true)
 
-      setAllOrgs(mapped)
+    const { data, error } = await supabase
+      .from("organization_members")
+      .select("*, organizations(*)")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .order("joined_at", { ascending: true })
 
-      const savedOrgId =
-        typeof window !== 'undefined' ? localStorage.getItem('teammate_active_org') : null
-      const savedOrg = savedOrgId ? mapped.find((o) => o.org.id === savedOrgId) : null
-      const activeOrg = savedOrg ?? mapped[0] ?? null
-
-      setOrganization(activeOrg?.org ?? null)
-      setMember(activeOrg?.member ?? null)
+    if (error) {
+      console.error("Failed to load organization memberships", error)
+      setMemberships([])
+      setOrganization(null)
+      setMember(null)
       setIsLoading(false)
+      return
     }
 
-    loadOrgs()
+    const mapped: OrganizationMembership[] = ((data ?? []) as MembershipQueryRow[])
+      .filter((row) => Boolean(row.organizations))
+      .map((row) => ({
+        org: row.organizations as Organization,
+        member: {
+          id: row.id,
+          organization_id: row.organization_id,
+          user_id: row.user_id,
+          role: row.role,
+          display_name: row.display_name,
+          is_active: row.is_active,
+          joined_at: row.joined_at,
+        },
+      }))
 
-    return () => {
-      active = false
+    setMemberships(mapped)
+
+    if (mapped.length === 0) {
+      setOrganization(null)
+      setMember(null)
+      setIsLoading(false)
+      return
     }
+
+    const savedOrgId =
+      typeof window !== "undefined"
+        ? localStorage.getItem(ACTIVE_ORG_STORAGE_KEY)
+        : null
+
+    const selected = mapped.find((item) => item.org.id === savedOrgId) ?? mapped[0]
+
+    setOrganization(selected.org)
+    setMember(selected.member)
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, selected.org.id)
+    }
+
+    setIsLoading(false)
   }, [supabase, userId])
 
-  function setActiveOrg(orgId: string) {
-    const found = allOrgs.find((o) => o.org.id === orgId)
-    if (!found) return
-
-    setOrganization(found.org)
-    setMember(found.member)
-
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('teammate_active_org', orgId)
-    }
-  }
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   const role = (member?.role as UserRole | null) ?? null
-  const value = useMemo<OrgContextType>(
+  const isManager = role === "manager"
+
+  const value = useMemo<OrgContextValue>(
     () => ({
       organization,
       member,
+      memberships,
       role,
-      isManager: role === 'manager',
+      isManager,
       isLoading,
+      refresh,
       setActiveOrg,
-      allOrgs,
     }),
-    [organization, member, role, isLoading, allOrgs]
+    [organization, member, memberships, role, isManager, isLoading, refresh, setActiveOrg]
   )
 
   return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>
 }
 
 export function useOrg() {
-  return useContext(OrgContext)
+  const context = useContext(OrgContext)
+
+  if (!context) {
+    throw new Error("useOrg must be used inside an OrgProvider")
+  }
+
+  return context
 }

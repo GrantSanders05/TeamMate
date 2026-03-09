@@ -1,9 +1,23 @@
-This hotfix targets production-build failures during page data collection/static generation.
+Foundation Rebuild Pack 1
 
-Included fixes:
-1. Keeps type/lint skipping enabled in next.config.js.
-2. Forces the authenticated app layout to render dynamically.
-3. Rewrites login page to remove useSearchParams.
-4. Rewrites signup page into a clean, minimal client page.
+Files included:
+- lib/types.ts
+- lib/constants.ts
+- lib/supabase/client.ts
+- lib/supabase/server.ts
+- lib/hooks/use-organization.ts
+- middleware.ts
+- app/(app)/layout.tsx
+- components/layout/app-shell.tsx
+- components/layout/sidebar.tsx
+- components/layout/top-bar.tsx
+- components/layout/mobile-nav.tsx
 
-Replace the matching files in the repo with these versions, commit, and redeploy.
+Purpose:
+- Stabilize typed foundations
+- Rebuild org context around the real schema
+- Clean up protected app shell and auth gating
+- Restore role-aware desktop/mobile navigation
+
+Recommended next step after pushing this pack:
+- Build Pack 2: organization creation, join flow, select-org page, and dashboard role routing

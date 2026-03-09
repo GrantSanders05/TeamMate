@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { openSchedulePrintWindow } from "@/lib/schedule/print-export"
+import { formatDateReadable, formatTimeRange } from "@/lib/schedule/time-format"
 
 type Period = {
   id: string
@@ -58,6 +59,20 @@ function getDatesInRange(start: string, end: string) {
   }
 
   return results
+}
+
+function calculateShiftHours(startTime: string, endTime: string) {
+  const [startHour, startMinute] = startTime.split(":").map(Number)
+  const [endHour, endMinute] = endTime.split(":").map(Number)
+
+  let startTotal = startHour * 60 + startMinute
+  let endTotal = endHour * 60 + endMinute
+
+  if (endTotal <= startTotal) {
+    endTotal += 24 * 60
+  }
+
+  return (endTotal - startTotal) / 60
 }
 
 export function MySchedulePeriodView({ periodId }: { periodId: string }) {
@@ -150,6 +165,27 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
     return getDatesInRange(period.start_date, period.end_date)
   }, [period])
 
+  const myAssignedShiftIds = useMemo(() => {
+    if (!member?.user_id) return new Set<string>()
+    return new Set(
+      assignments
+        .filter(
+          (assignment) => assignment.employee_id === member.user_id && assignment.status === "assigned"
+        )
+        .map((assignment) => assignment.shift_id)
+    )
+  }, [assignments, member?.user_id])
+
+  const myShiftCount = useMemo(() => {
+    return myAssignedShiftIds.size
+  }, [myAssignedShiftIds])
+
+  const myHours = useMemo(() => {
+    return shifts
+      .filter((shift) => myAssignedShiftIds.has(shift.id))
+      .reduce((total, shift) => total + calculateShiftHours(shift.start_time, shift.end_time), 0)
+  }, [shifts, myAssignedShiftIds])
+
   function getAssignedNames(shiftId: string) {
     const assigned = groupedAssignments[shiftId] || []
     return assigned.map((assignment) => {
@@ -210,7 +246,7 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
 
     openSchedulePrintWindow({
       title: `${organization.name} — ${period.name}`,
-      subtitle: `${period.start_date} → ${period.end_date} · Published Team Schedule`,
+      subtitle: `${formatDateReadable(period.start_date)} – ${formatDateReadable(period.end_date)} · Published Team Schedule`,
       shifts,
       assignments,
       members: members.map((m) => ({
@@ -218,6 +254,8 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
         user_id: m.user_id,
         display_name: m.display_name,
       })),
+      startDate: period.start_date,
+      endDate: period.end_date,
     })
   }
 
@@ -233,7 +271,7 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
       >
         <div className="font-medium text-slate-900">{shift.label}</div>
         <div className="mt-1 text-xs text-slate-600">
-          {shift.start_time} - {shift.end_time}
+          {formatTimeRange(shift.start_time, shift.end_time)}
         </div>
         <div className="mt-1 text-xs text-slate-500">
           {assignedPeople.length}/{shift.required_workers} assigned
@@ -308,7 +346,7 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
           <div>
             <h1 className="text-2xl font-semibold">{period.name}</h1>
             <p className="mt-1 text-sm text-slate-600">
-              {period.start_date} → {period.end_date} · Published Team Schedule
+              {formatDateReadable(period.start_date)} – {formatDateReadable(period.end_date)} · Published Team Schedule
             </p>
             <p className="mt-2 text-sm text-slate-600">
               This shows the full team schedule, including who you are working with on each shift.
@@ -337,57 +375,90 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
         </div>
       </div>
 
-      {viewMode === "calendar" ? (
-        <div className="rounded-lg border bg-white p-6">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
-            <p className="mt-1 text-sm text-slate-600">
-              Employees can see the full published team schedule and who is assigned to each shift.
-            </p>
-          </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div>
+          {viewMode === "calendar" ? (
+            <div className="rounded-lg border bg-white p-6">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Employees can see the full published team schedule and who is assigned to each shift.
+                </p>
+              </div>
 
-          <div className="overflow-x-auto">
-            <div className="grid min-w-[1100px] grid-cols-7 gap-4">
-              {calendarDates.map((date) => (
-                <div key={date} className="rounded-lg border bg-slate-50 p-3">
-                  <div className="border-b pb-2">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {formatWeekday(date)}
-                    </div>
-                    <div className="mt-1 text-sm font-medium text-slate-900">
-                      {date}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-3">
-                    {(shiftsByDate[date] || []).length === 0 ? (
-                      <div className="rounded-lg border border-dashed bg-white p-3 text-xs text-slate-500">
-                        No shifts
+              <div className="overflow-x-auto">
+                <div className="grid min-w-[1100px] grid-cols-7 gap-4">
+                  {calendarDates.map((date) => (
+                    <div key={date} className="rounded-lg border bg-slate-50 p-3">
+                      <div className="border-b pb-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {formatWeekday(date)}
+                        </div>
+                        <div className="mt-1 text-sm font-medium text-slate-900">
+                          {formatDateReadable(date)}
+                        </div>
                       </div>
-                    ) : (
-                      (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-lg border bg-white p-6">
-          <h2 className="text-lg font-semibold">List View</h2>
 
-          {shifts.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-600">
-              No published shifts in this period yet.
+                      <div className="mt-3 space-y-3">
+                        {(shiftsByDate[date] || []).length === 0 ? (
+                          <div className="rounded-lg border border-dashed bg-white p-3 text-xs text-slate-500">
+                            No shifts
+                          </div>
+                        ) : (
+                          (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : (
-            <div className="mt-4 space-y-4">
-              {shifts.map((shift) => renderShiftCard(shift))}
+            <div className="rounded-lg border bg-white p-6">
+              <h2 className="text-lg font-semibold">List View</h2>
+
+              {shifts.length === 0 ? (
+                <div className="mt-4 text-sm text-slate-600">
+                  No published shifts in this period yet.
+                </div>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  {shifts.map((shift) => renderShiftCard(shift))}
+                </div>
+              )}
             </div>
           )}
         </div>
-      )}
+
+        <aside>
+          <div className="sticky top-4 rounded-lg border bg-white p-5">
+            <h2 className="text-lg font-semibold">My Hours</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Your assigned hours and shifts for this published period.
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-md bg-slate-50 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">Shifts</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-900">
+                  {myShiftCount}
+                </div>
+              </div>
+
+              <div className="rounded-md bg-slate-50 p-3">
+                <div className="text-[11px] uppercase tracking-wide text-slate-500">Hours</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-900">
+                  {myHours.toFixed(1)}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
+              Expected total for this period: <span className="font-semibold">{myHours.toFixed(1)} hours</span>
+            </div>
+          </div>
+        </aside>
+      </div>
     </div>
   )
 }

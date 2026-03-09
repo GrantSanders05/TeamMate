@@ -16,6 +16,7 @@ const employeeItems = [
   { href: "/dashboard", label: "Home" },
   { href: "/availability", label: "Avail." },
   { href: "/my-schedule", label: "Schedule" },
+  { href: "/notifications", label: "Alerts" },
   { href: "/profile", label: "Profile" },
 ]
 

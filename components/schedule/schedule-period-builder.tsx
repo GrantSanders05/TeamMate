@@ -43,6 +43,7 @@ type Shift = {
   end_time: string
   required_workers: number
   shift_type_id: string | null
+  color?: string | null
 }
 
 type Assignment = {
@@ -69,6 +70,26 @@ type AvailabilitySummary = {
   noResponseCount: number
 }
 
+const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+function formatWeekday(dateString: string) {
+  const date = new Date(dateString + "T00:00:00")
+  return weekdayLabels[date.getDay()]
+}
+
+function getDatesInRange(start: string, end: string) {
+  const results: string[] = []
+  const current = new Date(start + "T00:00:00")
+  const last = new Date(end + "T00:00:00")
+
+  while (current <= last) {
+    results.push(current.toISOString().slice(0, 10))
+    current.setDate(current.getDate() + 1)
+  }
+
+  return results
+}
+
 export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const supabase = createClient()
   const { organization, member, isManager } = useOrgSafe()
@@ -80,6 +101,8 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [availabilityResponses, setAvailabilityResponses] = useState<AvailabilityResponse[]>([])
   const [loading, setLoading] = useState(true)
+
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
 
   const [newShiftDate, setNewShiftDate] = useState("")
   const [newShiftTypeId, setNewShiftTypeId] = useState("")
@@ -116,7 +139,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           .order("display_name"),
         supabase
           .from("shifts")
-          .select("id, date, label, start_time, end_time, required_workers, shift_type_id")
+          .select("id, date, label, start_time, end_time, required_workers, shift_type_id, color")
           .eq("scheduling_period_id", periodId)
           .order("date", { ascending: true })
           .order("start_time", { ascending: true }),
@@ -204,6 +227,19 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     return map
   }, [availabilityResponses, members, shifts])
 
+  const shiftsByDate = useMemo(() => {
+    return shifts.reduce<Record<string, Shift[]>>((acc, shift) => {
+      if (!acc[shift.date]) acc[shift.date] = []
+      acc[shift.date].push(shift)
+      return acc
+    }, {})
+  }, [shifts])
+
+  const calendarDates = useMemo(() => {
+    if (!period) return []
+    return getDatesInRange(period.start_date, period.end_date)
+  }, [period])
+
   function fillFromShiftType(shiftTypeId: string) {
     setNewShiftTypeId(shiftTypeId)
     const selected = shiftTypes.find((item) => item.id === shiftTypeId)
@@ -219,6 +255,8 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     e.preventDefault()
     if (!periodId) return
 
+    const template = shiftTypes.find((item) => item.id === newShiftTypeId)
+
     const { error } = await supabase.from("shifts").insert({
       scheduling_period_id: periodId,
       shift_type_id: newShiftTypeId || null,
@@ -227,7 +265,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
       start_time: newShiftStart,
       end_time: newShiftEnd,
       required_workers: Number(newShiftRequiredWorkers || "1"),
-      color: "#3B82F6",
+      color: template?.color || "#3B82F6",
     })
 
     if (error) {
@@ -326,6 +364,84 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     alert("Availability link copied.")
   }
 
+  function renderShiftCard(shift: Shift) {
+    const assigned = groupedAssignments[shift.id] || []
+    const availability = availabilityByShift[shift.id] || {
+      available: [],
+      unavailable: [],
+      noResponse: [],
+      availableCount: 0,
+      unavailableCount: 0,
+      noResponseCount: 0,
+    }
+
+    return (
+      <div
+        key={shift.id}
+        className="rounded-lg border p-3"
+        style={{ borderLeftWidth: "6px", borderLeftColor: shift.color || "#3B82F6" }}
+      >
+        <div className="font-medium text-slate-900">{shift.label}</div>
+        <div className="mt-1 text-xs text-slate-600">
+          {shift.start_time} - {shift.end_time}
+        </div>
+        <div className="mt-1 text-xs text-slate-500">
+          {assigned.length}/{shift.required_workers} assigned · {availability.availableCount} available
+        </div>
+
+        {isManager && period?.status !== "published" ? (
+          <div className="mt-3">
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
+              defaultValue=""
+              onChange={(e) => {
+                if (!e.target.value) return
+                void assignMember(shift.id, e.target.value)
+                e.currentTarget.value = ""
+              }}
+            >
+              <option value="">Assign available</option>
+              {availability.available.length === 0 ? (
+                <option value="" disabled>No available employees</option>
+              ) : (
+                availability.available.map((employee) => (
+                  <option key={employee.user_id} value={employee.user_id}>
+                    {employee.display_name}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        ) : null}
+
+        {assigned.length > 0 ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {assigned.map((assignment) => {
+              const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+              return (
+                <div
+                  key={assignment.id}
+                  className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs"
+                >
+                  <span>{assignedMember?.display_name || assignment.manual_name || "Assigned"}</span>
+                  {isManager && period?.status !== "published" ? (
+                    <button
+                      className="text-slate-500 hover:text-red-600"
+                      onClick={() => void unassignMember(assignment.id)}
+                      type="button"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : null}
+      </div>
+    )
+  }
+
   if (loading) {
     return <div className="rounded-lg border bg-white p-6">Loading schedule builder...</div>
   }
@@ -341,7 +457,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border bg-white p-6">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h1 className="text-2xl font-semibold">{period.name}</h1>
             <p className="mt-1 text-sm text-slate-600">
@@ -349,22 +465,39 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
             </p>
           </div>
 
-          {isManager ? (
-            <div className="flex flex-wrap gap-2">
-              {period.status === "draft" ? (
-                <Button onClick={() => void updateStatus("collecting")}>Open for Availability</Button>
-              ) : null}
-              {period.status === "collecting" ? (
-                <>
-                  <Button variant="outline" onClick={copyAvailabilityLink}>Copy Availability Link</Button>
-                  <Button onClick={() => void updateStatus("scheduling")}>Close Availability</Button>
-                </>
-              ) : null}
-              {period.status === "scheduling" ? (
-                <Button onClick={() => void updateStatus("published")}>Publish Schedule</Button>
-              ) : null}
-            </div>
-          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant={viewMode === "calendar" ? "default" : "outline"}
+              onClick={() => setViewMode("calendar")}
+            >
+              Weekly Calendar
+            </Button>
+            <Button
+              type="button"
+              variant={viewMode === "list" ? "default" : "outline"}
+              onClick={() => setViewMode("list")}
+            >
+              List View
+            </Button>
+
+            {isManager ? (
+              <>
+                {period.status === "draft" ? (
+                  <Button onClick={() => void updateStatus("collecting")}>Open for Availability</Button>
+                ) : null}
+                {period.status === "collecting" ? (
+                  <>
+                    <Button variant="outline" onClick={copyAvailabilityLink}>Copy Availability Link</Button>
+                    <Button onClick={() => void updateStatus("scheduling")}>Close Availability</Button>
+                  </>
+                ) : null}
+                {period.status === "scheduling" ? (
+                  <Button onClick={() => void updateStatus("published")}>Publish Schedule</Button>
+                ) : null}
+              </>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -455,129 +588,57 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         </form>
       ) : null}
 
-      <div className="rounded-lg border bg-white p-6">
-        <h2 className="text-lg font-semibold">Shifts</h2>
-
-        {shifts.length === 0 ? (
-          <div className="mt-4 text-sm text-slate-600">
-            No shifts have been added yet.
+      {viewMode === "calendar" ? (
+        <div className="rounded-lg border bg-white p-6">
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold">Weekly Calendar View</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Managers can see the schedule organized by day, with shift cards inside each date column.
+            </p>
           </div>
-        ) : (
-          <div className="mt-4 space-y-4">
-            {shifts.map((shift) => {
-              const assigned = groupedAssignments[shift.id] || []
-              const availability = availabilityByShift[shift.id] || {
-                available: [],
-                unavailable: [],
-                noResponse: [],
-                availableCount: 0,
-                unavailableCount: 0,
-                noResponseCount: 0,
-              }
 
-              return (
-                <div key={shift.id} className="rounded-lg border p-4">
-                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <div className="font-medium text-slate-900">{shift.label}</div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        {shift.date} · {shift.start_time} - {shift.end_time} · {assigned.length}/{shift.required_workers} assigned
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-full bg-green-100 px-2.5 py-1 text-green-700">
-                          {availability.availableCount} available
-                        </span>
-                        <span className="rounded-full bg-red-100 px-2.5 py-1 text-red-700">
-                          {availability.unavailableCount} unavailable
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">
-                          {availability.noResponseCount} no response
-                        </span>
-                      </div>
+          <div className="overflow-x-auto">
+            <div className="grid min-w-[1100px] grid-cols-7 gap-4">
+              {calendarDates.map((date) => (
+                <div key={date} className="rounded-lg border bg-slate-50 p-3">
+                  <div className="border-b pb-2">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {formatWeekday(date)}
                     </div>
-
-                    {isManager && period.status !== "published" ? (
-                      <div className="w-full md:w-72">
-                        <select
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                          defaultValue=""
-                          onChange={(e) => {
-                            if (!e.target.value) return
-                            void assignMember(shift.id, e.target.value)
-                            e.currentTarget.value = ""
-                          }}
-                        >
-                          <option value="">Assign available employee</option>
-                          {availability.available.length === 0 ? (
-                            <option value="" disabled>No available employees</option>
-                          ) : (
-                            availability.available.map((employee) => (
-                              <option key={employee.user_id} value={employee.user_id}>
-                                {employee.display_name}
-                              </option>
-                            ))
-                          )}
-                        </select>
-                      </div>
-                    ) : null}
+                    <div className="mt-1 text-sm font-medium text-slate-900">
+                      {date}
+                    </div>
                   </div>
 
-                  {availability.available.length > 0 ? (
-                    <div className="mt-3">
-                      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Available Employees
+                  <div className="mt-3 space-y-3">
+                    {(shiftsByDate[date] || []).length === 0 ? (
+                      <div className="rounded-lg border border-dashed bg-white p-3 text-xs text-slate-500">
+                        No shifts
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        {availability.available.map((employee) => (
-                          <span
-                            key={employee.user_id}
-                            className="rounded-full bg-green-50 px-3 py-1 text-sm text-green-700"
-                          >
-                            {employee.display_name}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-
-                  <div className="mt-3">
-                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Assigned
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {assigned.length === 0 ? (
-                        <span className="text-sm text-slate-500">No one assigned yet.</span>
-                      ) : (
-                        assigned.map((assignment) => {
-                          const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
-                          return (
-                            <div
-                              key={assignment.id}
-                              className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm"
-                            >
-                              <span>{assignedMember?.display_name || assignment.manual_name || "Assigned"}</span>
-                              {isManager && period.status !== "published" ? (
-                                <button
-                                  className="text-slate-500 hover:text-red-600"
-                                  onClick={() => void unassignMember(assignment.id)}
-                                  type="button"
-                                >
-                                  ×
-                                </button>
-                              ) : null}
-                            </div>
-                          )
-                        })
-                      )}
-                    </div>
+                    ) : (
+                      (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                    )}
                   </div>
                 </div>
-              )
-            })}
+              ))}
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="rounded-lg border bg-white p-6">
+          <h2 className="text-lg font-semibold">List View</h2>
+
+          {shifts.length === 0 ? (
+            <div className="mt-4 text-sm text-slate-600">
+              No shifts have been added yet.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {shifts.map((shift) => renderShiftCard(shift))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }

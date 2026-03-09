@@ -200,7 +200,7 @@ export function AvailabilityForm({ periodId }: { periodId: string }) {
       ) : null}
 
       <div className="space-y-4">
-        {Object.keys(shiftsByDate).length === 0 ? (
+        {Object.keys(shiftsByDate).length == 0 ? (
           <div className="rounded-lg border bg-white p-6 text-sm text-slate-600">
             No shifts have been added to this period yet.
           </div>

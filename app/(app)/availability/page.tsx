@@ -1,12 +1,7 @@
-
 "use client"
 
-import { AvailabilityManager } from "@/components/schedule/availability-manager"
+import { EmployeeAvailabilityHome } from "@/components/availability/employee-availability-home"
 
-export default function AvailabilityPage(){
-  return (
-    <div className="space-y-6">
-      <AvailabilityManager />
-    </div>
-  )
+export default function AvailabilityHomePage() {
+  return <EmployeeAvailabilityHome />
 }

@@ -7,19 +7,21 @@ export function useOrgSafe() {
     const ctx = useOrg()
     return {
       organization: ctx?.organization ?? null,
+      member: ctx?.member ?? null,
       memberships: ctx?.memberships ?? [],
       isManager: ctx?.isManager ?? false,
       isLoading: ctx?.isLoading ?? false,
-      refresh: ctx?.refresh ?? (() => {}),
+      refresh: ctx?.refresh ?? (async () => {}),
       setActiveOrg: ctx?.setActiveOrg ?? (() => {}),
     }
   } catch {
     return {
       organization: null,
+      member: null,
       memberships: [],
       isManager: false,
       isLoading: true,
-      refresh: () => {},
+      refresh: async () => {},
       setActiveOrg: () => {},
     }
   }

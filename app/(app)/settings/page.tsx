@@ -1,8 +1,12 @@
-export default function Page() {
+
+"use client"
+
+import { OrganizationSettings } from "@/components/organization/organization-settings"
+
+export default function SettingsPage() {
   return (
-    <div className="rounded-xl border bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="mt-2 text-sm text-slate-600">Settings route stabilized for a clean build.</p>
+    <div className="space-y-6">
+      <OrganizationSettings />
     </div>
   )
 }

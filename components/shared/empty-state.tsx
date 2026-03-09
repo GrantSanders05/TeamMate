@@ -1,26 +1,20 @@
-import type { LucideIcon } from "lucide-react"
-import { Button } from "@/components/ui/button"
+"use client"
 
-interface EmptyStateProps {
-  icon: LucideIcon
+type EmptyStateProps = {
   title: string
   description: string
-  action?: { label: string; onClick: () => void }
+  action?: React.ReactNode
 }
 
-export function EmptyState({ icon: Icon, title, description, action }: EmptyStateProps) {
+export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div className="rounded-lg border border-dashed p-8 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
-        <Icon className="h-6 w-6 text-slate-500" />
+    <div className="rounded-2xl border border-dashed bg-white p-8 text-center shadow-sm">
+      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-lg font-semibold text-slate-600">
+        •
       </div>
-      <h3 className="text-lg font-semibold">{title}</h3>
-      <p className="mt-2 text-sm text-slate-600">{description}</p>
-      {action ? (
-        <div className="mt-4">
-          <Button onClick={action.onClick}>{action.label}</Button>
-        </div>
-      ) : null}
+      <h3 className="mt-4 text-lg font-semibold text-slate-900">{title}</h3>
+      <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">{description}</p>
+      {action ? <div className="mt-5">{action}</div> : null}
     </div>
   )
 }

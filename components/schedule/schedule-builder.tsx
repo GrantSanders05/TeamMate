@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useEffect, useState } from "react"
@@ -9,6 +8,7 @@ import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"]
 
 export function ScheduleBuilder() {
+
   const supabase = createClient()
   const { organization } = useOrgSafe()
 
@@ -16,58 +16,76 @@ export function ScheduleBuilder() {
   const [shiftTypes,setShiftTypes] = useState([])
   const [schedule,setSchedule] = useState({})
 
-  async function load() {
+  async function load(){
+
     if(!organization) return
 
-    const { data:emps } = await supabase
+    const { data: emp } = await supabase
       .from("employees")
       .select("*")
-      .eq("organization_id",organization.id)
+      .eq("organization_id", organization.id)
 
-    const { data:types } = await supabase
+    const { data: types } = await supabase
       .from("shift_types")
       .select("*")
-      .eq("organization_id",organization.id)
+      .eq("organization_id", organization.id)
 
-    setEmployees(emps || [])
+    setEmployees(emp || [])
     setShiftTypes(types || [])
   }
 
-  useEffect(()=>{ load() },[organization])
+  useEffect(()=>{
+    load()
+  },[organization])
 
-  function assign(day,employee,shift){
-    const key = day+"-"+employee
-    setSchedule(prev => ({
+  function assign(day, employee, shift){
+    const key = `${day}-${employee}`
+
+    setSchedule(prev=>({
       ...prev,
       [key]: shift
     }))
   }
 
   async function publish(){
+
     if(!organization) return
 
-    const rows = Object.entries(schedule).map(([k,v])=>{
-      const [day,employee] = k.split("-")
+    const rows = Object.entries(schedule).map(([key,value])=>{
+      const [day,employee] = key.split("-")
+
       return {
         organization_id: organization.id,
         employee_id: employee,
-        shift_type_id: v,
+        shift_type_id: value,
         day
       }
     })
 
-    if(rows.length===0) return
+    if(rows.length === 0){
+      alert("No shifts assigned")
+      return
+    }
 
     await supabase.from("schedule_shifts").insert(rows)
-    alert("Schedule published")
+
+    alert("Schedule Published")
+  }
+
+  if(employees.length === 0){
+    return (
+      <div className="border p-4 rounded bg-white">
+        No employees found. Add employees first before creating a schedule.
+      </div>
+    )
   }
 
   return (
-    <div className="border rounded-lg p-6 space-y-6 bg-white">
-      <h2 className="text-lg font-semibold">Schedule Builder</h2>
+    <div className="border rounded-lg p-6 bg-white space-y-6">
 
       {employees.map(emp => (
         <div key={emp.id} className="border p-3 rounded space-y-2">
+
           <div className="font-medium">{emp.name}</div>
 
           <div className="grid grid-cols-7 gap-2">
@@ -78,20 +96,24 @@ export function ScheduleBuilder() {
                 onChange={(e)=>assign(day,emp.id,e.target.value)}
               >
                 <option value="">Off</option>
-                {shiftTypes.map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
+
+                {shiftTypes.map(type => (
+                  <option key={type.id} value={type.id}>
+                    {type.name}
                   </option>
                 ))}
+
               </select>
             ))}
           </div>
+
         </div>
       ))}
 
       <Button onClick={publish}>
         Publish Schedule
       </Button>
+
     </div>
   )
 }

@@ -13,7 +13,6 @@ export function LoginForm({ redirectTo = "/dashboard" }: { redirectTo?: string }
   const router = useRouter()
   const { toast } = useToast()
   const supabase = createClient()
-
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -22,10 +21,7 @@ export function LoginForm({ redirectTo = "/dashboard" }: { redirectTo?: string }
     e.preventDefault()
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
       toast({
@@ -82,7 +78,10 @@ export function LoginForm({ redirectTo = "/dashboard" }: { redirectTo?: string }
 
         <p className="mt-6 text-sm text-slate-600">
           Don&apos;t have an account?{" "}
-          <Link className="font-medium text-blue-600 hover:underline" href={`/signup?redirect=${encodeURIComponent(redirectTo)}`}>
+          <Link
+            className="font-medium text-blue-600 hover:underline"
+            href={`/signup?redirect=${encodeURIComponent(redirectTo)}`}
+          >
             Sign up
           </Link>
         </p>

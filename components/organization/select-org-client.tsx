@@ -7,7 +7,6 @@ import { JoinOrganizationForm } from "@/components/organization/join-organizatio
 
 export function SelectOrgClient() {
   const { memberships, setActiveOrg } = useOrg()
-  const safeMemberships = memberships ?? []
 
   return (
     <div className="space-y-6">
@@ -20,11 +19,11 @@ export function SelectOrgClient() {
         </p>
       </div>
 
-      {safeMemberships.length > 0 ? (
+      {memberships.length > 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Your organizations</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {safeMemberships.map(({ org, member }) => (
+            {memberships.map(({ org, member }) => (
               <div key={org.id} className="rounded-lg border border-slate-200 p-4">
                 <div className="font-medium text-slate-900">{org.name}</div>
                 <div className="mt-1 text-sm text-slate-500">

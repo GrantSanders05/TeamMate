@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { openSchedulePrintWindow } from "@/lib/schedule/print-export"
 
 type Period = {
   id: string
@@ -204,6 +205,22 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
     alert("Drop request submitted.")
   }
 
+  function exportSchedule() {
+    if (!period || !organization) return
+
+    openSchedulePrintWindow({
+      title: `${organization.name} — ${period.name}`,
+      subtitle: `${period.start_date} → ${period.end_date} · Published Team Schedule`,
+      shifts,
+      assignments,
+      members: members.map((m) => ({
+        id: m.id,
+        user_id: m.user_id,
+        display_name: m.display_name,
+      })),
+    })
+  }
+
   function renderShiftCard(shift: Shift) {
     const assignedPeople = getAssignedNames(shift.id)
     const currentUserAssigned = assignedPeople.some((person) => person.isCurrentUser)
@@ -312,6 +329,9 @@ export function MySchedulePeriodView({ periodId }: { periodId: string }) {
               onClick={() => setViewMode("list")}
             >
               List View
+            </Button>
+            <Button type="button" variant="outline" onClick={exportSchedule}>
+              Export / Print
             </Button>
           </div>
         </div>

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { openSchedulePrintWindow } from "@/lib/schedule/print-export"
 
 type Period = {
   id: string
@@ -112,6 +113,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   const [newShiftRequiredWorkers, setNewShiftRequiredWorkers] = useState("1")
   const [selectedBulkDates, setSelectedBulkDates] = useState<string[]>([])
   const [bulkCreating, setBulkCreating] = useState(false)
+  const [manualNames, setManualNames] = useState<Record<string, string>>({})
 
   async function loadData() {
     if (!organization) {
@@ -408,6 +410,31 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     await loadData()
   }
 
+  async function assignManualName(shiftId: string) {
+    if (!member?.user_id) return
+
+    const manualName = (manualNames[shiftId] || "").trim()
+    if (!manualName) {
+      alert("Enter a name first.")
+      return
+    }
+
+    const { error } = await supabase.from("shift_assignments").insert({
+      shift_id: shiftId,
+      manual_name: manualName,
+      assigned_by: member.user_id,
+      status: "assigned",
+    })
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setManualNames((prev) => ({ ...prev, [shiftId]: "" }))
+    await loadData()
+  }
+
   async function unassignMember(assignmentId: string) {
     const { error } = await supabase
       .from("shift_assignments")
@@ -452,6 +479,22 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     const url = `${window.location.origin}/availability/${period.id}?token=${token}`
     await navigator.clipboard.writeText(url)
     alert("Availability link copied.")
+  }
+
+  function exportSchedule() {
+    if (!period || !organization) return
+
+    openSchedulePrintWindow({
+      title: `${organization.name} — ${period.name}`,
+      subtitle: `${period.start_date} → ${period.end_date} · ${period.status}`,
+      shifts,
+      assignments,
+      members: members.map((m) => ({
+        id: m.id,
+        user_id: m.user_id,
+        display_name: m.display_name,
+      })),
+    })
   }
 
   function renderShiftCard(shift: Shift) {
@@ -502,6 +545,19 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               )}
             </select>
 
+            <div className="flex gap-2">
+              <Input
+                value={manualNames[shift.id] || ""}
+                onChange={(e) =>
+                  setManualNames((prev) => ({ ...prev, [shift.id]: e.target.value }))
+                }
+                placeholder="Write in name"
+              />
+              <Button type="button" variant="outline" onClick={() => void assignManualName(shift.id)}>
+                Add
+              </Button>
+            </div>
+
             <select
               className="flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-sm"
               defaultValue=""
@@ -527,12 +583,15 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           <div className="mt-3 flex flex-wrap gap-2">
             {assigned.map((assignment) => {
               const assignedMember = members.find((item) => item.user_id === assignment.employee_id)
+              const displayName = assignedMember?.display_name || assignment.manual_name || "Assigned"
+              const isManual = Boolean(assignment.manual_name) && !assignment.employee_id
+
               return (
                 <div
                   key={assignment.id}
                   className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-xs"
                 >
-                  <span>{assignedMember?.display_name || assignment.manual_name || "Assigned"}</span>
+                  <span className={isManual ? "italic text-slate-700" : ""}>{displayName}</span>
                   {isManager && period?.status !== "published" ? (
                     <button
                       className="text-slate-500 hover:text-red-600"
@@ -588,6 +647,9 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
               onClick={() => setViewMode("list")}
             >
               List View
+            </Button>
+            <Button type="button" variant="outline" onClick={exportSchedule}>
+              Export / Print
             </Button>
 
             {isManager ? (

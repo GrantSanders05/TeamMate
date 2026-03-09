@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { ImagePlus, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -48,6 +49,8 @@ export function CreateOrganizationForm() {
   const [secondaryColor, setSecondaryColor] = useState(DEFAULT_SECONDARY_COLOR)
   const [fontFamily, setFontFamily] = useState(DEFAULT_FONT_FAMILY)
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE)
+  const [logoUrl, setLogoUrl] = useState("")
+  const [logoFile, setLogoFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
 
   const previewStyle = useMemo(
@@ -90,6 +93,30 @@ export function CreateOrganizationForm() {
     }
   }
 
+  async function uploadLogo(userId: string) {
+    if (!logoFile) return logoUrl.trim() || null
+
+    const ext = logoFile.name.split(".").pop()?.toLowerCase() || "png"
+    const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
+
+    const { error } = await supabase.storage
+      .from("org-logos")
+      .upload(filePath, logoFile, {
+        cacheControl: "3600",
+        upsert: false,
+      })
+
+    if (error) {
+      throw new Error(error.message)
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("org-logos").getPublicUrl(filePath)
+
+    return publicUrl
+  }
+
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
@@ -108,64 +135,78 @@ export function CreateOrganizationForm() {
       return
     }
 
-    const [{ data: profile }, slug, joinCode] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", user.id).single(),
-      generateUniqueSlug(name),
-      generateUniqueJoinCode(),
-    ])
+    try {
+      const [{ data: profile }, slug, joinCode, uploadedLogoUrl] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", user.id).single(),
+        generateUniqueSlug(name),
+        generateUniqueJoinCode(),
+        uploadLogo(user.id),
+      ])
 
-    const { data: organization, error: orgError } = await supabase
-      .from("organizations")
-      .insert({
-        name,
-        slug,
-        join_code: joinCode,
-        primary_color: primaryColor,
-        secondary_color: secondaryColor,
-        font_family: fontFamily,
-        timezone,
-        created_by: user.id,
+      const { data: organization, error: orgError } = await supabase
+        .from("organizations")
+        .insert({
+          name,
+          slug,
+          join_code: joinCode,
+          primary_color: primaryColor,
+          secondary_color: secondaryColor,
+          font_family: fontFamily,
+          timezone,
+          logo_url: uploadedLogoUrl,
+          created_by: user.id,
+        })
+        .select()
+        .single()
+
+      if (orgError || !organization) {
+        toast({
+          title: "Could not create organization",
+          description: orgError?.message || "Unknown error",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+
+      const { error: memberError } = await supabase.from("organization_members").insert({
+        organization_id: organization.id,
+        user_id: user.id,
+        role: "manager",
+        display_name: profile?.full_name || user.email || "Manager",
+        is_active: true,
       })
-      .select()
-      .single()
 
-    if (orgError || !organization) {
+      if (memberError) {
+        toast({
+          title: "Organization created, but membership failed",
+          description: memberError.message,
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+
+      await refresh()
+
+      toast({
+        title: "Organization created",
+        description: `${organization.name} is ready to use.`,
+      })
+
+      router.push("/dashboard")
+      router.refresh()
+    } catch (error) {
       toast({
         title: "Could not create organization",
-        description: orgError?.message || "Unknown error",
+        description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       })
       setLoading(false)
       return
     }
 
-    const { error: memberError } = await supabase.from("organization_members").insert({
-      organization_id: organization.id,
-      user_id: user.id,
-      role: "manager",
-      display_name: profile?.full_name || user.email || "Manager",
-      is_active: true,
-    })
-
-    if (memberError) {
-      toast({
-        title: "Organization created, but membership failed",
-        description: memberError.message,
-        variant: "destructive",
-      })
-      setLoading(false)
-      return
-    }
-
-    await refresh()
-
-    toast({
-      title: "Organization created",
-      description: `${organization.name} is ready to use.`,
-    })
-
-    router.push("/dashboard")
-    router.refresh()
+    setLoading(false)
   }
 
   return (
@@ -240,11 +281,69 @@ export function CreateOrganizationForm() {
           </select>
         </div>
 
+        <div className="space-y-4 rounded-xl border border-slate-200 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
+            <ImagePlus className="h-4 w-4" />
+            Logo
+          </div>
+
+          <div>
+            <Label htmlFor="logoFile">Upload logo</Label>
+            <Input
+              id="logoFile"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+            />
+            <p className="mt-1 text-xs text-slate-500">
+              Upload to the public <code>org-logos</code> bucket.
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="logoUrl">
+              <span className="inline-flex items-center gap-2">
+                <Link2 className="h-4 w-4" />
+                Or paste an image URL
+              </span>
+            </Label>
+            <Input
+              id="logoUrl"
+              type="url"
+              value={logoUrl}
+              onChange={(e) => setLogoUrl(e.target.value)}
+              placeholder="https://example.com/logo.png"
+            />
+          </div>
+        </div>
+
         <div className="rounded-xl p-4 text-white shadow-sm" style={previewStyle}>
-          <div className="text-xs uppercase tracking-[0.16em] text-white/80">Brand preview</div>
-          <div className="mt-2 text-xl font-semibold">{name || "Your organization"}</div>
-          <div className="mt-1 text-sm text-white/80">
-            {fontFamily} · {timezone}
+          <div className="flex items-center gap-3">
+            {(logoUrl || logoFile) ? (
+              <div className="h-12 w-12 overflow-hidden rounded-lg bg-white/20">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt="Logo preview"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-white/80">
+                    File ready
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <div>
+              <div className="text-xs uppercase tracking-[0.16em] text-white/80">
+                Brand preview
+              </div>
+              <div className="mt-1 text-xl font-semibold">{name || "Your organization"}</div>
+              <div className="mt-1 text-sm text-white/80">
+                {fontFamily} · {timezone}
+              </div>
+            </div>
           </div>
         </div>
 

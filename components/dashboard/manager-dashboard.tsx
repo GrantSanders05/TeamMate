@@ -5,12 +5,12 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { StatsCards } from "@/components/dashboard/stats-cards"
 import { createClient } from "@/lib/supabase/client"
-import { useOrg } from "@/lib/hooks/use-organization"
+import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import type { SchedulingPeriod } from "@/lib/types"
 
 export function ManagerDashboard() {
   const supabase = createClient()
-  const { organization } = useOrg()
+  const { organization } = useOrgSafe()
   const [activeEmployees, setActiveEmployees] = useState(0)
   const [pendingDropRequests, setPendingDropRequests] = useState(0)
   const [currentPeriods, setCurrentPeriods] = useState<SchedulingPeriod[]>([])
@@ -23,7 +23,7 @@ export function ManagerDashboard() {
     async function loadDashboard() {
       setIsLoading(true)
 
-      const [{ count: employeeCount }, { data: periods }, { count: dropCount }] =
+      const [{ count: employeeCount }, { data: periods }] =
         await Promise.all([
           supabase
             .from("organization_members")
@@ -37,38 +37,60 @@ export function ManagerDashboard() {
             .in("status", ["draft", "collecting", "scheduling", "published"])
             .order("start_date", { ascending: true })
             .limit(5),
-          supabase
-            .from("drop_requests")
-            .select("id, shift_assignments!inner(shift_id, shifts!inner(scheduling_period_id, scheduling_periods!inner(organization_id)))", {
-              count: "exact",
-              head: true,
-            })
-            .eq("status", "pending")
-            .eq("shift_assignments.shifts.scheduling_periods.organization_id", organization.id),
         ])
 
       setActiveEmployees(employeeCount ?? 0)
-      setPendingDropRequests(dropCount ?? 0)
       setCurrentPeriods((periods as SchedulingPeriod[]) ?? [])
 
       const activePeriodIds = ((periods as SchedulingPeriod[]) ?? []).map((period) => period.id)
 
       if (activePeriodIds.length > 0) {
-        const { count } = await supabase
-          .from("shifts")
-          .select("*", { count: "exact", head: true })
-          .in("scheduling_period_id", activePeriodIds)
+        const [{ count }, { data: shiftData }] = await Promise.all([
+          supabase
+            .from("shifts")
+            .select("*", { count: "exact", head: true })
+            .in("scheduling_period_id", activePeriodIds),
+          supabase
+            .from("shifts")
+            .select("id")
+            .in("scheduling_period_id", activePeriodIds),
+        ])
 
         setShiftCount(count ?? 0)
+
+        const shiftIds = ((shiftData as { id: string }[]) || []).map((s) => s.id)
+        if (shiftIds.length > 0) {
+          const { data: assignmentData } = await supabase
+            .from("shift_assignments")
+            .select("id")
+            .in("shift_id", shiftIds)
+
+          const assignmentIds = ((assignmentData as { id: string }[]) || []).map((a) => a.id)
+
+          if (assignmentIds.length > 0) {
+            const { count: pendingCount } = await supabase
+              .from("drop_requests")
+              .select("*", { count: "exact", head: true })
+              .eq("status", "pending")
+              .in("assignment_id", assignmentIds)
+
+            setPendingDropRequests(pendingCount ?? 0)
+          } else {
+            setPendingDropRequests(0)
+          }
+        } else {
+          setPendingDropRequests(0)
+        }
       } else {
         setShiftCount(0)
+        setPendingDropRequests(0)
       }
 
       setIsLoading(false)
     }
 
     void loadDashboard()
-  }, [organization, supabase])
+  }, [organization?.id])
 
   const stats = useMemo(
     () => [
@@ -96,13 +118,13 @@ export function ManagerDashboard() {
 
           <div className="flex flex-wrap gap-2">
             <Button asChild>
-              <Link href="/schedule/new">Create Schedule</Link>
+              <Link href="/schedule">Schedules</Link>
             </Button>
             <Button asChild variant="outline">
               <Link href="/employees">View Employees</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link href="/settings">Organization Settings</Link>
+              <Link href="/drop-requests">Drop Requests</Link>
             </Button>
           </div>
         </div>
@@ -159,11 +181,11 @@ export function ManagerDashboard() {
             <Link href="/employees" className="block rounded-lg border border-slate-200 p-4 text-slate-700 hover:bg-slate-50">
               Manage employees and roles
             </Link>
-            <Link href="/history" className="block rounded-lg border border-slate-200 p-4 text-slate-700 hover:bg-slate-50">
-              Review archived schedules
+            <Link href="/drop-requests" className="block rounded-lg border border-slate-200 p-4 text-slate-700 hover:bg-slate-50">
+              Review pending drop requests
             </Link>
             <Link href="/settings" className="block rounded-lg border border-slate-200 p-4 text-slate-700 hover:bg-slate-50">
-              Update branding, shift types, and join settings
+              Update branding, templates, and join settings
             </Link>
           </div>
         </div>

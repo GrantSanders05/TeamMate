@@ -16,7 +16,7 @@ import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 const managerItems = [
   { href: "/dashboard", label: "Home", icon: Home },
   { href: "/schedule", label: "Schedules", icon: CalendarDays },
-  { href: "/employees", label: "Team", icon: Users },
+  { href: "/drop-requests", label: "Drops", icon: ClipboardList },
   { href: "/settings", label: "Settings", icon: Settings },
 ]
 

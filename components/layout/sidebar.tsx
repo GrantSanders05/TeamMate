@@ -18,6 +18,7 @@ const managerItems = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/schedule", label: "Schedules", icon: CalendarDays },
   { href: "/employees", label: "Employees", icon: Users },
+  { href: "/drop-requests", label: "Drop Requests", icon: ClipboardList },
   { href: "/history", label: "History", icon: Archive },
   { href: "/settings", label: "Settings", icon: Settings },
 ]

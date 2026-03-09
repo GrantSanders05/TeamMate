@@ -1,8 +1,7 @@
-export default function Page() {
-  return (
-    <div className="rounded-xl border bg-white p-6 shadow-sm">
-      <h1 className="text-2xl font-bold">New Schedule</h1>
-      <p className="mt-2 text-sm text-slate-600">New schedule route stabilized for a clean build.</p>
-    </div>
-  )
+"use client"
+
+import { CreateSchedulePeriodPage } from "@/components/schedule/create-schedule-period-page"
+
+export default function NewSchedulePage() {
+  return <CreateSchedulePeriodPage />
 }

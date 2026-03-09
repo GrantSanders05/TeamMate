@@ -52,7 +52,7 @@ export function JoinCodeDisplay() {
     )
     if (!confirmed) return
 
-    try:
+    try {
       let nextCode = createJoinCode()
 
       while (true) {
@@ -112,7 +112,10 @@ export function JoinCodeDisplay() {
               {organization.join_code}
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => copyText(organization.join_code, "Join code")}>
+              <Button
+                size="sm"
+                onClick={() => copyText(organization.join_code, "Join code")}
+              >
                 <Copy className="mr-2 h-4 w-4" />
                 Copy code
               </Button>

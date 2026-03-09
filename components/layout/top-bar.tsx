@@ -17,8 +17,6 @@ export function TopBar({ userEmail }: { userEmail: string }) {
   const router = useRouter()
   const supabase = createClient()
   const { organization, memberships, setActiveOrg, refresh, isLoading } = useOrg()
-
-  const safeMemberships = memberships ?? []
   const initials = userEmail ? userEmail.charAt(0).toUpperCase() : "U"
 
   async function handleSignOut() {
@@ -45,7 +43,7 @@ export function TopBar({ userEmail }: { userEmail: string }) {
             Refresh
           </Button>
 
-          {safeMemberships.length > 1 ? (
+          {memberships.length > 1 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -54,7 +52,7 @@ export function TopBar({ userEmail }: { userEmail: string }) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {safeMemberships.map(({ org }) => (
+                {memberships.map(({ org }) => (
                   <DropdownMenuItem
                     key={org.id}
                     onClick={() => {
@@ -80,7 +78,7 @@ export function TopBar({ userEmail }: { userEmail: string }) {
                 {userEmail || "Profile"}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {safeMemberships.length > 1 ? (
+              {memberships.length > 1 ? (
                 <DropdownMenuItem onClick={() => router.push("/select-org")}>
                   Select organization
                 </DropdownMenuItem>

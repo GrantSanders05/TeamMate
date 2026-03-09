@@ -21,7 +21,7 @@ import type {
 
 const OrgContext = createContext<OrgContextValue | undefined>(undefined)
 
-interface MembershipQueryRow extends OrganizationMember {
+type MembershipQueryRow = OrganizationMember & {
   organizations: Organization | null
 }
 

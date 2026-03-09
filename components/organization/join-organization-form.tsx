@@ -14,7 +14,6 @@ export function JoinOrganizationForm() {
   const router = useRouter()
   const { toast } = useToast()
   const { refresh } = useOrg()
-
   const [joinCode, setJoinCode] = useState("")
   const [loading, setLoading] = useState(false)
 
@@ -38,7 +37,7 @@ export function JoinOrganizationForm() {
       return
     }
 
-    const [{ data: organization }, { data: profile }] = await Promise.all([
+    const [{ data: organization, error: orgError }, { data: profile }] = await Promise.all([
       supabase
         .from("organizations")
         .select("*")
@@ -47,7 +46,7 @@ export function JoinOrganizationForm() {
       supabase.from("profiles").select("*").eq("id", user.id).single(),
     ])
 
-    if (!organization) {
+    if (orgError || !organization) {
       toast({
         title: "Invalid join code",
         description: "We couldn't find an organization with that code.",

@@ -24,12 +24,12 @@ export function JoinByLinkClient({ code }: { code: string }) {
         return
       }
 
-      const [{ data: organization }, { data: profile }] = await Promise.all([
+      const [{ data: organization, error: orgError }, { data: profile }] = await Promise.all([
         supabase.from("organizations").select("*").eq("join_code", code).single(),
         supabase.from("profiles").select("*").eq("id", user.id).single(),
       ])
 
-      if (!organization) {
+      if (orgError || !organization) {
         if (mounted) {
           setMessage("That join link is invalid or expired.")
         }
@@ -63,9 +63,7 @@ export function JoinByLinkClient({ code }: { code: string }) {
           .eq("id", existingMembership.id)
 
         if (error) {
-          if (mounted) {
-            setMessage(error.message)
-          }
+          if (mounted) setMessage(error.message)
           return
         }
       } else {
@@ -78,9 +76,7 @@ export function JoinByLinkClient({ code }: { code: string }) {
         })
 
         if (error) {
-          if (mounted) {
-            setMessage(error.message)
-          }
+          if (mounted) setMessage(error.message)
           return
         }
       }

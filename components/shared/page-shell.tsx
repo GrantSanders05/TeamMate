@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 export function PageShell({
   title,
@@ -6,24 +6,24 @@ export function PageShell({
   actions,
   children,
 }: {
-  title?: string
-  subtitle?: string
-  actions?: React.ReactNode
-  children: React.ReactNode
+  title?: string;
+  subtitle?: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-6">
-      {(title || subtitle || actions) ? (
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-end md:justify-between">
-          <div>
-            {title ? <h1 className="text-2xl font-semibold text-slate-900">{title}</h1> : null}
-            {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
+      {title || subtitle || actions ? (
+        <div className="app-surface app-section-header">
+          <div className="space-y-1">
+            {title ? <h1 className="app-title">{title}</h1> : null}
+            {subtitle ? <p className="app-subtitle">{subtitle}</p> : null}
           </div>
-          {actions ? <div className="shrink-0">{actions}</div> : null}
+          {actions ? <div className="flex flex-wrap gap-3">{actions}</div> : null}
         </div>
       ) : null}
 
-      {children}
+      <div className="flex flex-col gap-6">{children}</div>
     </div>
-  )
+  );
 }

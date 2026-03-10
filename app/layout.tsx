@@ -1,23 +1,26 @@
-import "./globals.css"
-import { Plus_Jakarta_Sans } from "next/font/google"
+import type { Metadata } from "next";
+import { Plus_Jakarta_Sans } from "next/font/google";
+import "./globals.css";
 
-const jakarta = Plus_Jakarta_Sans({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-jakarta",
+  variable: "--font-plus-jakarta",
   display: "swap",
-})
+});
 
-export const metadata = {
+export const metadata: Metadata = {
   title: "TeamMate",
-  description: "Employee scheduling",
-}
+  description: "Employee scheduling made simple.",
+};
 
-export default function RootLayout({ children }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className={jakarta.variable}>
-      <body style={{ fontFamily: "var(--font-jakarta), system-ui, -apple-system, Segoe UI, Roboto, sans-serif" }}>
-        {children}
-      </body>
+    <html lang="en" className={plusJakarta.variable}>
+      <body>{children}</body>
     </html>
-  )
+  );
 }

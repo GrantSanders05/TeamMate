@@ -1,104 +1,140 @@
-import Link from "next/link"
+import Link from "next/link";
+
+const featureCards = [
+  {
+    title: "Collect availability",
+    body: "Let employees submit availability from their phone in a clean, low-friction workflow.",
+  },
+  {
+    title: "Build faster",
+    body: "Create shifts, assign workers quickly, and keep the week organized without clutter.",
+  },
+  {
+    title: "Publish clearly",
+    body: "Share polished schedules with your team and export them when you need to.",
+  },
+];
+
+const highlights = [
+  { label: "Available", value: "12" },
+  { label: "Assigned", value: "18" },
+  { label: "Open shifts", value: "3" },
+];
 
 export default function LandingPage() {
   return (
-    <main className="min-h-screen bg-slate-50">
-      <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6 lg:px-8 lg:py-24">
-        <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_0.9fr]">
-          <div>
-            <div className="inline-flex rounded-full border bg-white px-4 py-1.5 text-sm font-medium text-slate-700 shadow-sm">
-              TeamMate
+    <main className="min-h-screen">
+      <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
+        <header className="flex items-center justify-between py-4">
+          <div className="text-lg font-semibold tracking-tight text-slate-950">
+            TeamMate
+          </div>
+          <nav className="flex items-center gap-3 text-sm">
+            <Link
+              href="/login"
+              className="rounded-full px-4 py-2 font-medium text-slate-600 hover:bg-white hover:text-slate-950"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/signup"
+              className="rounded-full bg-slate-900 px-4 py-2 font-medium text-white shadow-sm transition hover:bg-slate-800"
+            >
+              Get started free
+            </Link>
+          </nav>
+        </header>
+
+        <section className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[1.1fr_0.9fr] lg:py-12">
+          <div className="space-y-6">
+            <span className="app-chip">Scheduling made simple</span>
+            <div className="space-y-4">
+              <h1 className="max-w-2xl text-balance text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+                Build cleaner schedules without the chaos.
+              </h1>
+              <p className="max-w-2xl text-lg leading-8 text-slate-600">
+                Create shifts, collect availability, assign employees, and publish a professional team schedule from one place.
+              </p>
             </div>
-
-            <h1 className="mt-6 text-4xl font-bold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-              Scheduling made simple.
-            </h1>
-
-            <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600 sm:text-lg">
-              Create shifts, collect availability, publish schedules, and keep your team on the same page — all in one clean, mobile-friendly workspace.
-            </p>
-
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-wrap items-center gap-3">
               <Link
                 href="/signup"
-                className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-medium text-white shadow-sm"
+                className="rounded-full bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500"
               >
-                Get Started Free
+                Get started free
               </Link>
               <Link
                 href="/login"
-                className="inline-flex items-center justify-center rounded-xl border bg-white px-5 py-3 text-sm font-medium text-slate-700 shadow-sm"
+                className="rounded-full border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50"
               >
-                Sign In
+                Sign in
               </Link>
             </div>
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="text-sm font-semibold text-slate-900">Collect Availability</div>
-                <p className="mt-2 text-sm text-slate-600">
-                  Let employees submit availability from their phone in a clean workflow.
-                </p>
-              </div>
-              <div className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="text-sm font-semibold text-slate-900">Build Faster</div>
-                <p className="mt-2 text-sm text-slate-600">
-                  Use shift templates, weekly views, and quick assignment tools to build schedules.
-                </p>
-              </div>
-              <div className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="text-sm font-semibold text-slate-900">Publish Clearly</div>
-                <p className="mt-2 text-sm text-slate-600">
-                  Share polished schedules with your whole team and export them when needed.
-                </p>
-              </div>
+            <div className="grid gap-4 pt-4 sm:grid-cols-3">
+              {featureCards.map((card) => (
+                <article key={card.title} className="hero-card">
+                  <h2 className="text-base font-semibold text-slate-950">
+                    {card.title}
+                  </h2>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {card.body}
+                  </p>
+                </article>
+              ))}
             </div>
           </div>
 
-          <div className="rounded-3xl border bg-white p-5 shadow-sm sm:p-6">
-            <div className="rounded-2xl bg-slate-900 p-5 text-white">
-              <div className="text-sm font-medium text-slate-300">This Week</div>
-              <div className="mt-2 text-2xl font-semibold">Bluebird Coffee</div>
-              <div className="mt-1 text-sm text-slate-300">Team schedule overview</div>
+          <aside className="hero-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">This week</p>
+                <h2 className="mt-1 text-2xl font-semibold text-slate-950">
+                  Bluebird Coffee
+                </h2>
+              </div>
+              <span className="app-chip">Live preview</span>
             </div>
 
-            <div className="mt-5 grid gap-4">
-              <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-slate-900">Morning Shift</div>
-                    <div className="mt-1 text-sm text-slate-600">Mon, Jul 15 · 8:00 AM – 12:00 PM</div>
-                  </div>
-                  <div className="rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
-                    Fully Staffed
-                  </div>
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-semibold text-slate-950">Morning shift</p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Mon, Jul 15 · 8:00 AM – 12:00 PM
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="app-chip border-blue-200 bg-blue-50 text-blue-700">
+                    Fully staffed
+                  </span>
+                  <span className="app-chip">Team schedule overview</span>
                 </div>
               </div>
 
-              <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="text-sm font-medium text-slate-900">Live Highlights</div>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl bg-white p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Available</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-900">12</div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {highlights.map((item) => (
+                  <div key={item.label} className="app-stat">
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">
+                      {item.label}
+                    </p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-950">
+                      {item.value}
+                    </p>
                   </div>
-                  <div className="rounded-xl bg-white p-3">
-                    <div className="text-xs uppercase tracking-wide text-slate-500">Assigned</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-900">18</div>
-                  </div>
-                </div>
+                ))}
               </div>
 
-              <div className="rounded-2xl border bg-slate-50 p-4">
-                <div className="text-sm font-medium text-slate-900">Built for teams on the go</div>
-                <p className="mt-2 text-sm text-slate-600">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-950">
+                  Built for teams on the go
+                </p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
                   Managers and employees can use the same app comfortably on desktop or phone.
                 </p>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </aside>
+        </section>
+      </div>
     </main>
-  )
+  );
 }

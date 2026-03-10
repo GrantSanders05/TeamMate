@@ -1,38 +1,30 @@
-"use client"
+"use client";
 
-import type { ReactNode } from "react"
-import { MobileNav } from "@/components/layout/mobile-nav"
-import { Sidebar } from "@/components/layout/sidebar"
-import { TopBar } from "@/components/layout/top-bar"
-import { OrgProvider } from "@/lib/hooks/use-organization"
+import { Sidebar } from "@/components/layout/sidebar";
+import { TopBar } from "@/components/layout/top-bar";
+import { MobileNav } from "@/components/layout/mobile-nav";
+import { useOrg } from "@/lib/hooks/use-organization";
 
 export function AppShell({
   children,
   userId,
-  userEmail,
 }: {
-  children: ReactNode
-  userId: string
-  userEmail: string
+  children: React.ReactNode;
+  userId: string;
 }) {
+  const { organization, isManager } = useOrg();
+
   return (
-    <OrgProvider userId={userId}>
-      <div className="min-h-screen bg-slate-50 text-slate-900">
-        <div className="mx-auto flex min-h-screen max-w-[1600px]">
-          <aside className="hidden border-r border-slate-200 bg-white lg:block lg:w-72">
-            <Sidebar />
-          </aside>
+    <div className="min-h-screen">
+      <div className="mx-auto flex w-full max-w-[1700px] gap-4 px-3 py-3 sm:px-4 lg:px-6">
+        <Sidebar orgName={organization?.name} isManager={isManager} />
 
-          <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-            <TopBar userEmail={userEmail} />
-            <main className="flex-1 px-4 py-4 sm:px-6 lg:px-8">{children}</main>
-          </div>
-        </div>
-
-        <div className="lg:hidden">
-          <MobileNav />
+        <div className="min-w-0 flex-1">
+          <TopBar orgName={organization?.name} />
+          <div className="pb-24 lg:pb-6">{children}</div>
         </div>
       </div>
-    </OrgProvider>
-  )
+      <MobileNav />
+    </div>
+  );
 }

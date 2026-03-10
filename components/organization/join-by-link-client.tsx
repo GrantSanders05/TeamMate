@@ -15,21 +15,26 @@ export function JoinByLinkClient({ code }: { code: string }) {
     let mounted = true
 
     async function handleJoin() {
+      const normalizedCode = code.trim().toUpperCase()
       const {
         data: { user },
       } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push(`/login?redirect=${encodeURIComponent(`/join/${code}`)}`)
+        router.push(`/login?redirect=${encodeURIComponent(`/join/${normalizedCode}`)}`)
         return
       }
 
-      const [{ data: organization, error: orgError }, { data: profile }] = await Promise.all([
-        supabase.from("organizations").select("*").eq("join_code", code).single(),
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
+      const [{ data: organization }, { data: profile }] = await Promise.all([
+        supabase
+          .from("organizations")
+          .select("id, name, join_code")
+          .ilike("join_code", normalizedCode)
+          .maybeSingle(),
+        supabase.from("profiles").select("id, full_name, email").eq("id", user.id).single(),
       ])
 
-      if (orgError || !organization) {
+      if (!organization) {
         if (mounted) {
           setMessage("That join link is invalid or expired.")
         }
@@ -38,7 +43,7 @@ export function JoinByLinkClient({ code }: { code: string }) {
 
       const { data: existingMembership } = await supabase
         .from("organization_members")
-        .select("*")
+        .select("id, role, is_active")
         .eq("organization_id", organization.id)
         .eq("user_id", user.id)
         .maybeSingle()
@@ -59,6 +64,7 @@ export function JoinByLinkClient({ code }: { code: string }) {
           .update({
             is_active: true,
             display_name: profile?.full_name || user.email || "Employee",
+            role: existingMembership.role || "employee",
           })
           .eq("id", existingMembership.id)
 
@@ -85,7 +91,6 @@ export function JoinByLinkClient({ code }: { code: string }) {
         title: "Joined organization",
         description: `You joined ${organization.name}.`,
       })
-
       router.push("/dashboard")
       router.refresh()
     }
@@ -98,12 +103,12 @@ export function JoinByLinkClient({ code }: { code: string }) {
   }, [code, router, supabase, toast])
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-        <div className="text-xl font-semibold">Teammate</div>
-        <h1 className="mt-4 text-2xl font-bold text-slate-900">Joining organization</h1>
-        <p className="mt-2 text-sm text-slate-600">{message}</p>
+    <div className="mx-auto flex min-h-[50vh] max-w-xl items-center justify-center px-4">
+      <div className="section-card w-full text-center">
+        <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">TeamMate</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950">Joining organization</h1>
+        <p className="mt-3 text-sm text-slate-600">{message}</p>
       </div>
-    </main>
+    </div>
   )
 }

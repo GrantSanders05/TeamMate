@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { formatDisplayDate } from "@/lib/date-format"
 
 type Period = {
   id: string
@@ -32,6 +33,7 @@ export function SchedulePeriodsPage() {
       .from("scheduling_periods")
       .select("id, name, start_date, end_date, status, period_type")
       .eq("organization_id", organization.id)
+      .neq("status", "archived")
       .order("start_date", { ascending: false })
 
     if (error) {
@@ -50,65 +52,63 @@ export function SchedulePeriodsPage() {
   }, [organization?.id])
 
   if (isLoading || loading) {
-    return <div className="rounded-lg border bg-white p-6">Loading schedules...</div>
+    return <div className="section-card text-sm text-slate-600">Loading schedules...</div>
   }
 
   if (!organization) {
     return (
-      <div className="rounded-lg border bg-white p-6">
-        <h1 className="text-2xl font-semibold">Schedules</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Select or create an organization before creating schedules.
-        </p>
-      </div>
+      <section className="section-card">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-950">Schedules</h1>
+        <p className="mt-3 text-sm text-slate-600">Select or create an organization before creating schedules.</p>
+      </section>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold">Schedules</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Create scheduling periods and open each one to build assignments.
-            </p>
-          </div>
+    <section className="space-y-6">
+      <div className="section-card flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">Schedules</h1>
+          <p className="mt-2 text-sm text-slate-600">
+            Active schedule periods only. Archived periods now move out of this page.
+          </p>
+        </div>
+
+        <div className="flex gap-2">
+          <Button asChild variant="outline" className="rounded-2xl">
+            <Link href="/history">Archived</Link>
+          </Button>
           {isManager ? (
-            <Button asChild>
+            <Button asChild className="rounded-2xl">
               <Link href="/schedule/new">New Schedule</Link>
             </Button>
           ) : null}
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-6">
-        {periods.length === 0 ? (
-          <div className="text-sm text-slate-600">
-            No scheduling periods yet. Click <strong>New Schedule</strong> to create one.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {periods.map((period) => (
-              <div
-                key={period.id}
-                className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <div className="font-medium text-slate-900">{period.name}</div>
-                  <div className="mt-1 text-sm text-slate-600">
-                    {period.start_date} → {period.end_date} · {period.period_type} · {period.status}
-                  </div>
-                </div>
-
-                <Button asChild variant="outline">
-                  <Link href={`/schedule/${period.id}`}>Open Builder</Link>
-                </Button>
+      {periods.length === 0 ? (
+        <div className="section-card text-sm text-slate-600">No active scheduling periods right now.</div>
+      ) : (
+        <div className="grid gap-4">
+          {periods.map((period) => (
+            <div key={period.id} className="section-card flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-950">{period.name}</h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  {formatDisplayDate(period.start_date)} – {formatDisplayDate(period.end_date)}
+                </p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                  {period.period_type} · {period.status}
+                </p>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+
+              <Button asChild className="rounded-2xl md:self-start">
+                <Link href={`/schedule/${period.id}`}>Open Builder</Link>
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   )
 }

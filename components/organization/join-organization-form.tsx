@@ -17,8 +17,8 @@ export function JoinOrganizationForm() {
   const [joinCode, setJoinCode] = useState("")
   const [loading, setLoading] = useState(false)
 
-  async function handleJoin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  async function handleJoin(event: React.FormEvent) {
+    event.preventDefault()
     setLoading(true)
 
     const normalizedCode = joinCode.trim().toUpperCase()
@@ -40,10 +40,10 @@ export function JoinOrganizationForm() {
     const [{ data: organization, error: orgError }, { data: profile }] = await Promise.all([
       supabase
         .from("organizations")
-        .select("*")
-        .eq("join_code", normalizedCode)
-        .single(),
-      supabase.from("profiles").select("*").eq("id", user.id).single(),
+        .select("id, name, join_code")
+        .ilike("join_code", normalizedCode)
+        .maybeSingle(),
+      supabase.from("profiles").select("id, full_name, email").eq("id", user.id).single(),
     ])
 
     if (orgError || !organization) {
@@ -58,7 +58,7 @@ export function JoinOrganizationForm() {
 
     const { data: existingMembership } = await supabase
       .from("organization_members")
-      .select("*")
+      .select("id, role, is_active")
       .eq("organization_id", organization.id)
       .eq("user_id", user.id)
       .maybeSingle()
@@ -71,6 +71,7 @@ export function JoinOrganizationForm() {
       await refresh()
       router.push("/dashboard")
       router.refresh()
+      setLoading(false)
       return
     }
 
@@ -114,40 +115,39 @@ export function JoinOrganizationForm() {
     }
 
     await refresh()
-
     toast({
       title: "Joined organization",
       description: `You joined ${organization.name}.`,
     })
-
     router.push("/dashboard")
     router.refresh()
+    setLoading(false)
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">Join organization</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Enter the 6-character code shared by your manager.
-      </p>
+    <form onSubmit={handleJoin} className="section-card max-w-xl space-y-5">
+      <div>
+        <h2 className="text-2xl font-bold tracking-tight text-slate-950">Join organization</h2>
+        <p className="mt-2 text-sm text-slate-600">Enter the 6-character code shared by your manager.</p>
+      </div>
 
-      <form className="mt-4 space-y-4" onSubmit={handleJoin}>
-        <div>
-          <Label htmlFor="joinCode">Join code</Label>
-          <Input
-            id="joinCode"
-            value={joinCode}
-            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            placeholder="ABC123"
-            maxLength={6}
-            required
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="joinCode">Join code</Label>
+        <Input
+          id="joinCode"
+          value={joinCode}
+          onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+          placeholder="ABC123"
+          maxLength={6}
+          autoComplete="off"
+          required
+          className="h-12 rounded-2xl text-base tracking-[0.18em] uppercase"
+        />
+      </div>
 
-        <Button className="w-full" type="submit" disabled={loading}>
-          {loading ? "Joining..." : "Join Organization"}
-        </Button>
-      </form>
-    </div>
+      <Button type="submit" disabled={loading} className="rounded-2xl px-5">
+        {loading ? "Joining..." : "Join Organization"}
+      </Button>
+    </form>
   )
 }

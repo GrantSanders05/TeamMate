@@ -1,7 +1,6 @@
-
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,21 +10,24 @@ import { createClient } from "@/lib/supabase/client"
 export function OrganizationSettings() {
   const supabase = createClient()
   const { organization, refresh } = useOrgSafe()
-
   const [name, setName] = useState(organization?.name ?? "")
   const [logoUrl, setLogoUrl] = useState(organization?.logo_url ?? "")
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    setName(organization?.name ?? "")
+    setLogoUrl(organization?.logo_url ?? "")
+  }, [organization?.id, organization?.name, organization?.logo_url])
 
   async function save() {
     if (!organization) return
 
     setSaving(true)
-
     await supabase
       .from("organizations")
       .update({
-        name,
-        logo_url: logoUrl || null
+        name: name.trim(),
+        logo_url: logoUrl.trim() || null,
       })
       .eq("id", organization.id)
 
@@ -33,25 +35,41 @@ export function OrganizationSettings() {
     setSaving(false)
   }
 
-  if (!organization) return <div>No organization</div>
+  if (!organization) {
+    return <div className="section-card text-sm text-slate-600">No organization selected.</div>
+  }
 
   return (
-    <div className="border rounded-lg p-6 bg-white space-y-4">
-      <h2 className="text-lg font-semibold">Organization Settings</h2>
-
+    <section className="section-card space-y-6">
       <div>
-        <Label>Name</Label>
-        <Input value={name} onChange={(e)=>setName(e.target.value)} />
+        <h2 className="text-2xl font-bold tracking-tight text-slate-950">Organization Settings</h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Core organization details are editable here. The join code stays stable unless you intentionally rotate it in the database.
+        </p>
       </div>
 
-      <div>
-        <Label>Logo URL</Label>
-        <Input value={logoUrl} onChange={(e)=>setLogoUrl(e.target.value)} />
+      <div className="grid gap-5 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="orgName">Name</Label>
+          <Input id="orgName" value={name} onChange={(e) => setName(e.target.value)} className="h-12 rounded-2xl" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="orgJoinCode">Join code</Label>
+          <Input id="orgJoinCode" value={(organization.join_code || "").toUpperCase()} readOnly className="h-12 rounded-2xl font-mono tracking-[0.16em]" />
+        </div>
       </div>
 
-      <Button onClick={save} disabled={saving}>
-        {saving ? "Saving..." : "Save"}
-      </Button>
-    </div>
+      <div className="space-y-2">
+        <Label htmlFor="logoUrl">Logo URL</Label>
+        <Input id="logoUrl" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} className="h-12 rounded-2xl" />
+      </div>
+
+      <div className="flex justify-end">
+        <Button onClick={() => void save()} disabled={saving} className="rounded-2xl px-5">
+          {saving ? "Saving..." : "Save"}
+        </Button>
+      </div>
+    </section>
   )
 }

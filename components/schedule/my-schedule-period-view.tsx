@@ -1,8 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { CalendarDays, Clock3 } from "lucide-react"
-
 import { createClient } from "@/lib/supabase/client"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
@@ -99,10 +97,6 @@ function getShiftHours(start: string, end: string) {
   return (endTotal - startTotal) / 60
 }
 
-function getShiftStartDate(shift: Shift) {
-  return new Date(`${shift.date}T${shift.start_time}`)
-}
-
 export function MySchedulePeriodView({
   periodId,
 }: {
@@ -164,6 +158,7 @@ export function MySchedulePeriodView({
         ])
 
       const shiftIds = ((shiftData as Shift[]) || []).map((shift) => shift.id)
+
       let assignmentData: Assignment[] = []
       let requestData: DropRequest[] = []
 
@@ -288,17 +283,6 @@ export function MySchedulePeriodView({
     [myAssignments, shifts]
   )
 
-  const myUpcomingShift = useMemo(() => {
-    const nextShift = myAssignments
-      .map((assignment) => shifts.find((shift) => shift.id === assignment.shift_id))
-      .filter(Boolean)
-      .filter((shift): shift is Shift => Boolean(shift))
-      .filter((shift) => getShiftStartDate(shift).getTime() >= Date.now())
-      .sort((a, b) => getShiftStartDate(a).getTime() - getShiftStartDate(b).getTime())[0]
-
-    return nextShift || null
-  }, [myAssignments, shifts])
-
   const getDisplayName = (assignment: Assignment) => {
     const member = members.find((item) => item.user_id === assignment.employee_id)
     return member?.display_name || assignment.manual_name || "Assigned"
@@ -317,7 +301,6 @@ export function MySchedulePeriodView({
     }
 
     const reason = window.prompt("Add an optional reason for dropping this shift:", "")
-
     if (reason === null) {
       return
     }
@@ -369,209 +352,180 @@ export function MySchedulePeriodView({
     return (
       <div
         key={shift.id}
-        className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+        className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+        style={{
+          borderLeftWidth: 4,
+          borderLeftColor: shift.color || "#3B82F6",
+        }}
       >
-        <div className="flex">
-          <div
-            className="w-1.5 shrink-0"
-            style={{ backgroundColor: shift.color || "#2563EB" }}
-          />
-          <div className="min-w-0 flex-1 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-slate-900">{shift.label}</p>
-                <p className="mt-1 text-xs font-medium text-slate-500">
-                  {formatRange(shift.start_time, shift.end_time)}
-                </p>
-              </div>
-              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                {shiftAssignments.length} assigned
-              </span>
-            </div>
-
-            <div className="mt-3 space-y-2">
-              {shiftAssignments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
-                  No one assigned yet
-                </div>
-              ) : (
-                shiftAssignments.map((assignment) => {
-                  const mine = Boolean(currentUserId && assignment.employee_id === currentUserId)
-                  const dropRequest = dropRequestsByAssignmentId.get(assignment.id)
-                  const canDrop = mine && assignment.status !== "dropped"
-
-                  return (
-                    <div
-                      key={assignment.id}
-                      className={`rounded-2xl px-3 py-3 text-sm ${
-                        mine
-                          ? "bg-blue-600 text-white"
-                          : "border border-slate-200 bg-slate-50 text-slate-700"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <span className="block truncate font-medium">{getDisplayName(assignment)}</span>
-                        </div>
-                        {mine ? (
-                          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                            You
-                          </span>
-                        ) : null}
-                      </div>
-
-                      {canDrop ? (
-                        <div className="mt-3 rounded-2xl bg-white/10 p-3">
-                          <div className="mb-2 text-xs font-medium text-white/85">
-                            {dropRequest?.status === "pending"
-                              ? "Drop request pending"
-                              : "Need to drop this shift?"}
-                          </div>
-                          <Button
-                            size="sm"
-                            variant={dropRequest?.status === "pending" ? "secondary" : "outline"}
-                            className={`min-h-[44px] w-full rounded-xl border-0 ${
-                              dropRequest?.status === "pending"
-                                ? "bg-white text-slate-900 hover:bg-white"
-                                : "bg-white text-slate-900 hover:bg-slate-100"
-                            }`}
-                            disabled={Boolean(dropRequest?.status === "pending") || workingAssignmentId === assignment.id}
-                            onClick={() => void handleDropShift(assignment)}
-                          >
-                            {workingAssignmentId === assignment.id
-                              ? "Sending..."
-                              : dropRequest?.status === "pending"
-                                ? "Pending"
-                                : "Drop Shift"}
-                          </Button>
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })
-              )}
-            </div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">{shift.label}</p>
+            <p className="mt-1 text-sm text-slate-600">{formatRange(shift.start_time, shift.end_time)}</p>
           </div>
+
+          <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+            {shiftAssignments.length} assigned
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {shiftAssignments.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+              No one assigned yet
+            </div>
+          ) : (
+            shiftAssignments.map((assignment) => {
+              const mine = Boolean(currentUserId && assignment.employee_id === currentUserId)
+              const dropRequest = dropRequestsByAssignmentId.get(assignment.id)
+              const canDrop = mine && assignment.status !== "dropped"
+
+              return (
+                <div
+                  key={assignment.id}
+                  className={`rounded-2xl border px-4 py-3 ${
+                    mine
+                      ? "border-blue-200 bg-blue-600 text-white"
+                      : "border-slate-200 bg-slate-50 text-slate-900"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold">{getDisplayName(assignment)}</span>
+                    {mine ? (
+                      <span className="rounded-full bg-white/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                        You
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {canDrop ? (
+                    <div className="mt-3 rounded-2xl bg-white/10 p-3">
+                      <p className="text-sm font-medium text-white">
+                        {dropRequest?.status === "pending"
+                          ? "Drop request pending"
+                          : "Need to drop this shift?"}
+                      </p>
+
+                      <Button
+                        type="button"
+                        variant={dropRequest?.status === "pending" ? "secondary" : "outline"}
+                        className={`mt-3 w-full ${
+                          mine
+                            ? "border-white/40 bg-white text-blue-700 hover:bg-slate-100"
+                            : ""
+                        }`}
+                        disabled={workingAssignmentId === assignment.id || dropRequest?.status === "pending"}
+                        onClick={() => void handleDropShift(assignment)}
+                      >
+                        {workingAssignmentId === assignment.id
+                          ? "Sending..."
+                          : dropRequest?.status === "pending"
+                            ? "Pending"
+                            : "Drop Shift"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })
+          )}
         </div>
       </div>
     )
   }
 
   return (
-    <PageShell title={period?.name || "My Schedule"} subtitle="Published team schedule">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <SectionCard className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-700 text-white md:col-span-2 xl:col-span-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100/80">Next Shift</p>
-          {myUpcomingShift ? (
-            <div className="mt-4 space-y-3">
-              <h2 className="text-2xl font-semibold tracking-tight">{myUpcomingShift.label}</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-2xl bg-white/10 p-3">
-                  <div className="flex items-center gap-2 text-blue-100/80">
-                    <CalendarDays className="h-4 w-4" />
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Day</span>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-white">{formatDayLabel(myUpcomingShift.date).long}</p>
-                </div>
-                <div className="rounded-2xl bg-white/10 p-3">
-                  <div className="flex items-center gap-2 text-blue-100/80">
-                    <Clock3 className="h-4 w-4" />
-                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Time</span>
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-white">
-                    {formatRange(myUpcomingShift.start_time, myUpcomingShift.end_time)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-blue-50/90">
-              You do not have an upcoming assigned shift in this period.
-            </p>
-          )}
+    <PageShell
+      title={period?.name || "My Schedule"}
+      subtitle={
+        period
+          ? `${formatDayLabel(period.start_date).long} – ${formatDayLabel(period.end_date).long}`
+          : "Published schedule"
+      }
+    >
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Shift Amount</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-900">{myShiftCount}</p>
+          <p className="mt-1 text-sm text-slate-600">scheduled this period</p>
         </SectionCard>
 
-        <SectionCard className="bg-gradient-to-br from-blue-50 via-white to-white">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Shift Amount</p>
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{myShiftCount}</h2>
-            <p className="text-sm text-slate-500">scheduled this period</p>
-          </div>
-        </SectionCard>
-
-        <SectionCard className="bg-gradient-to-br from-emerald-50 via-white to-white">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">Expected Hours</p>
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{myExpectedHours.toFixed(1)}</h2>
-            <p className="text-sm text-slate-500">hours in this schedule</p>
-          </div>
+        <SectionCard>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Expected Hours</p>
+          <p className="mt-3 text-3xl font-semibold text-slate-900">{myExpectedHours.toFixed(1)}</p>
+          <p className="mt-1 text-sm text-slate-600">hours in this schedule</p>
         </SectionCard>
       </div>
 
-      <SectionCard>
-        {error ? (
+      {error ? (
+        <SectionCard>
           <p className="text-sm text-red-600">{error}</p>
-        ) : loading ? (
-          <p className="text-sm text-slate-500">Loading schedule...</p>
-        ) : weekDays.length === 0 ? (
-          <p className="text-sm text-slate-500">No shifts were found for this published period.</p>
-        ) : (
-          <>
-            <div className="hidden xl:block">
-              <div className="overflow-x-auto pb-2">
-                <div className="grid min-w-[1180px] grid-cols-7 gap-4">
-                  {weekDays.map((day) => {
-                    const labels = formatDayLabel(day)
-                    const dayShifts = shiftsByDate.get(day) || []
+        </SectionCard>
+      ) : loading ? (
+        <SectionCard>
+          <p className="text-sm text-slate-600">Loading schedule...</p>
+        </SectionCard>
+      ) : weekDays.length === 0 ? (
+        <SectionCard>
+          <p className="text-sm text-slate-600">No shifts were found for this published period.</p>
+        </SectionCard>
+      ) : (
+        <>
+          <div className="space-y-4 lg:hidden">
+            {weekDays.map((day) => {
+              const labels = formatDayLabel(day)
+              const dayShifts = shiftsByDate.get(day) || []
 
-                    return (
-                      <div
-                        key={day}
-                        className="flex min-h-[420px] min-w-0 flex-col rounded-[28px] border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 shadow-sm"
-                      >
-                        <div className="mb-4 rounded-[22px] border border-slate-200 bg-white px-4 py-3">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            {labels.short}
-                          </p>
-                          <h3 className="text-base font-semibold text-slate-900">{labels.long}</h3>
-                        </div>
+              return (
+                <SectionCard key={`mobile-${day}`}>
+                  <div className="mb-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{labels.short}</p>
+                    <h3 className="mt-1 text-xl font-semibold text-slate-900">{labels.long}</h3>
+                  </div>
 
-                        <div className="space-y-3">
-                          {dayShifts.length === 0 ? (
-                            <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
-                              No shifts
-                            </div>
-                          ) : (
-                            dayShifts.map((shift) => renderShiftCard(shift))
-                          )}
-                        </div>
+                  <div className="space-y-4">
+                    {dayShifts.length === 0 ? (
+                      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                        No shifts
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
+                    ) : (
+                      dayShifts.map((shift) => renderShiftCard(shift))
+                    )}
+                  </div>
+                </SectionCard>
+              )
+            })}
+          </div>
 
-            <div className="space-y-4 xl:hidden">
+          <SectionCard className="hidden lg:block">
+            <div className="grid grid-cols-7 gap-4">
               {weekDays.map((day) => {
                 const labels = formatDayLabel(day)
                 const dayShifts = shiftsByDate.get(day) || []
 
                 return (
                   <div
-                    key={day}
-                    className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm"
+                    key={`desktop-${day}`}
+                    className="min-w-0 rounded-[28px] border border-slate-200 bg-slate-50/60 p-4"
                   >
-                    <div className="mb-4 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                    <div className="mb-4 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                         {labels.short}
                       </p>
-                      <h3 className="text-base font-semibold text-slate-900">{labels.long}</h3>
+                      <h3 className="mt-2 text-[28px] font-semibold leading-none text-slate-900">
+                        {new Date(`${day}T12:00:00`).getDate()}
+                      </h3>
+                      <p className="mt-2 text-sm font-medium text-slate-700">
+                        {new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
+                          month: "short",
+                          weekday: "short",
+                        })}
+                      </p>
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {dayShifts.length === 0 ? (
-                        <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
+                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
                           No shifts
                         </div>
                       ) : (
@@ -582,9 +536,9 @@ export function MySchedulePeriodView({
                 )
               })}
             </div>
-          </>
-        )}
-      </SectionCard>
+          </SectionCard>
+        </>
+      )}
     </PageShell>
   )
 }

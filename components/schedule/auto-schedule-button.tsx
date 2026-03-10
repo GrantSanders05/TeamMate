@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Wand2, Loader2 } from "lucide-react"
+import { Loader2, Wand2 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 
@@ -28,7 +29,7 @@ export function AutoScheduleButton({
 
   async function runAutoSchedule() {
     const confirmed = window.confirm(
-      "Run auto schedule? This fills open shift slots using employee availability and balanced load."
+      "Run auto schedule? This will fill open shift slots using employee availability and balanced load."
     )
 
     if (!confirmed) return
@@ -67,21 +68,22 @@ export function AutoScheduleButton({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => void runAutoSchedule()} disabled={isRunning}>
-          {isRunning ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+        <Button type="button" variant="outline" onClick={() => void runAutoSchedule()} disabled={isRunning}>
+          {isRunning ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Wand2 className="mr-2 h-4 w-4" />
+          )}
           {isRunning ? "Building Schedule..." : "Auto Fill Schedule"}
         </Button>
 
         {summary ? (
           <div className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 shadow-sm">
-            {summary.created_assignments} assigned · {summary.unfilled_slots} open slot{summary.unfilled_slots === 1 ? "" : "s"} left
+            {summary.created_assignments} assigned · {summary.unfilled_slots} open slot
+            {summary.unfilled_slots === 1 ? "" : "s"} left
           </div>
         ) : null}
       </div>
-
-      <p className="mt-2 text-xs text-slate-500">
-        Uses submitted availability first, then balances hours and shift count across the schedule period.
-      </p>
     </div>
   )
 }

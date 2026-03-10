@@ -11,6 +11,7 @@ import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { openSchedulePrintWindow } from "@/lib/schedule/print-export"
 import { formatDateReadable, formatTimeRange } from "@/lib/schedule/time-format"
 import { computeEmployeeLoads } from "@/lib/scheduling/recommendations"
+import { AutoScheduleButton } from "@/components/schedule/auto-schedule-button"
 
 type Period = {
   id: string
@@ -827,6 +828,14 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
             <Button type="button" variant="outline" onClick={() => setViewMode(viewMode === "calendar" ? "list" : "calendar")}>
               {viewMode === "calendar" ? "List View" : "Calendar View"}
             </Button>
+            {isManager && period.status !== "published" && period.status !== "archived" ? (
+              <AutoScheduleButton
+                periodId={period.id}
+                onApplied={async () => {
+                  await loadData()
+                }}
+              />
+            ) : null}
             {period.status === "draft" ? (
               <Button type="button" onClick={() => void updateStatus("collecting")}>
                 Open for Availability

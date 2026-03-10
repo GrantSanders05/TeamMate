@@ -42,31 +42,26 @@ function statusMeta(status: string) {
       return {
         label: "Collecting Availability",
         pill: "border-amber-200 bg-amber-50 text-amber-800",
-        accent: "from-amber-500 to-orange-500",
       }
     case "scheduling":
       return {
         label: "Scheduling In Progress",
         pill: "border-blue-200 bg-blue-50 text-blue-800",
-        accent: "from-blue-600 to-indigo-600",
       }
     case "published":
       return {
         label: "Published",
         pill: "border-emerald-200 bg-emerald-50 text-emerald-800",
-        accent: "from-emerald-600 to-teal-600",
       }
     case "archived":
       return {
         label: "Archived",
         pill: "border-slate-200 bg-slate-50 text-slate-700",
-        accent: "from-slate-700 to-slate-500",
       }
     default:
       return {
         label: "Draft",
         pill: "border-violet-200 bg-violet-50 text-violet-800",
-        accent: "from-violet-600 to-purple-600",
       }
   }
 }
@@ -142,6 +137,7 @@ export function ManagerDashboard() {
     () => periods.filter((period) => period.status === "collecting"),
     [periods]
   )
+
   const latestPeriod = activePeriods[0] || periods[0] || null
   const latestMeta = statusMeta(latestPeriod?.status || "draft")
 
@@ -174,29 +170,29 @@ export function ManagerDashboard() {
         <OrgBrandHeader />
 
         <div className="grid gap-6 xl:grid-cols-[1.35fr_1fr]">
-          <div className={`overflow-hidden rounded-[32px] border border-slate-900/10 bg-gradient-to-br ${latestMeta.accent} p-6 text-white shadow-xl`}>
+          <div className="overflow-hidden rounded-[32px] border border-slate-900/10 bg-gradient-to-br from-slate-950 via-slate-900 to-blue-700 p-6 text-white shadow-xl">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/80">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-200">
                   Manager Snapshot
                 </p>
                 <h2 className="mt-4 text-3xl font-semibold leading-tight">
                   {latestPeriod ? latestPeriod.name : "No schedule periods yet"}
                 </h2>
-                <p className="mt-3 text-base text-white/85">
+                <p className="mt-3 text-base text-blue-50/90">
                   {latestPeriod
                     ? `${formatDate(latestPeriod.start_date)} – ${formatDate(latestPeriod.end_date)}`
                     : "Create your first schedule period to start collecting availability and building shifts."}
                 </p>
               </div>
 
-              <div className="rounded-2xl border border-white/20 bg-white/10 p-3">
-                <CalendarClock className="h-7 w-7 text-white" />
+              <div className="rounded-2xl border border-blue-300/40 bg-white/5 p-3">
+                <CalendarClock className="h-7 w-7 text-blue-100" />
               </div>
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <div className="rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-white">
+              <div className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] ${latestMeta.pill}`}>
                 {latestMeta.label}
               </div>
 
@@ -211,7 +207,7 @@ export function ManagerDashboard() {
 
             <div className="mt-6 grid gap-3 md:grid-cols-2">
               <Button asChild className="h-12 rounded-2xl bg-white text-slate-950 hover:bg-slate-100">
-                <Link href="/schedules">Open Schedules</Link>
+                <Link href="/schedule">Open Schedules</Link>
               </Button>
 
               <Button
@@ -224,21 +220,21 @@ export function ManagerDashboard() {
             </div>
 
             <div className="mt-6 rounded-[28px] border border-white/15 bg-white/10 p-4 backdrop-blur-sm">
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/80">Quick Summary</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-blue-100">Quick Summary</p>
 
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/75">Pending Drops</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100">Pending Drops</p>
                   <p className="mt-2 text-3xl font-semibold text-white">{pendingDrops}</p>
                 </div>
 
                 <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/75">Collecting</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100">Collecting</p>
                   <p className="mt-2 text-3xl font-semibold text-white">{collectingPeriods.length}</p>
                 </div>
 
                 <div className="rounded-2xl bg-white/10 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-white/75">Published</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-100">Published</p>
                   <p className="mt-2 text-3xl font-semibold text-white">{publishedPeriods.length}</p>
                 </div>
               </div>
@@ -250,7 +246,7 @@ export function ManagerDashboard() {
 
             <div className="mt-5 space-y-3">
               <Link
-                href="/schedules"
+                href="/schedule"
                 className="group flex items-center justify-between rounded-[24px] border border-slate-200 bg-slate-50 p-4 transition hover:border-slate-300 hover:bg-white"
               >
                 <div className="flex items-start gap-3">
@@ -374,7 +370,7 @@ export function ManagerDashboard() {
                       </div>
 
                       <Button asChild variant="outline">
-                        <Link href="/schedules">Open</Link>
+                        <Link href="/schedule">Open</Link>
                       </Button>
                     </div>
                   )

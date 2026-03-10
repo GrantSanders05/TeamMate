@@ -14,7 +14,7 @@ export function PageShell({
   return (
     <div className="page-shell">
       {(title || subtitle || actions) ? (
-        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+        <div className="soft-card flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             {title ? (
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900">

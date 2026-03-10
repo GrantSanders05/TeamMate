@@ -106,11 +106,7 @@ function getShiftHours(start: string, end: string) {
   return (endTotal - startTotal) / 60
 }
 
-export function MySchedulePeriodView({
-  periodId,
-}: {
-  periodId: string
-}) {
+export function MySchedulePeriodView({ periodId }: { periodId: string }) {
   const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<PeriodRecord | null>(null)
@@ -262,9 +258,7 @@ export function MySchedulePeriodView({
   const shiftsByDate = useMemo(() => {
     const grouped = new Map<string, Shift[]>()
 
-    for (const day of weekDays) {
-      grouped.set(day, [])
-    }
+    for (const day of weekDays) grouped.set(day, [])
 
     for (const shift of shifts) {
       const list = grouped.get(shift.date) || []
@@ -365,15 +359,18 @@ export function MySchedulePeriodView({
           borderLeftColor: shift.color || "#3B82F6",
         }}
       >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-base font-semibold text-slate-900">{shift.label}</p>
-            <p className="mt-1 text-sm text-slate-600">{formatRange(shift.start_time, shift.end_time)}</p>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <p className="min-w-0 flex-1 pr-2 text-base font-semibold leading-tight text-slate-900">
+              {shift.label}
+            </p>
+
+            <div className="shrink-0 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+              {shiftAssignments.length} assigned
+            </div>
           </div>
 
-          <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-            {shiftAssignments.length} assigned
-          </div>
+          <p className="whitespace-nowrap text-sm text-slate-600">{formatRange(shift.start_time, shift.end_time)}</p>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -502,7 +499,7 @@ export function MySchedulePeriodView({
             })}
           </div>
 
-          <SectionCard className="hidden lg:block overflow-hidden">
+          <SectionCard className="hidden overflow-hidden lg:block">
             <div className="overflow-x-auto pb-2">
               <div className="grid min-w-[1820px] grid-flow-col auto-cols-[240px] gap-5">
                 {weekDays.map((day) => {

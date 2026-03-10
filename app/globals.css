@@ -39,7 +39,7 @@ a {
 
 @layer components {
   .app-surface {
-    @apply rounded-[28px] border border-slate-200 bg-white shadow-sm;
+    @apply rounded-[30px] border border-slate-200 bg-white shadow-sm;
   }
 
   .page-shell {
@@ -47,11 +47,11 @@ a {
   }
 
   .section-card {
-    @apply rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm;
+    @apply rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm;
   }
 
   .soft-card {
-    @apply rounded-[22px] border border-slate-200 bg-white shadow-sm;
+    @apply rounded-[24px] border border-slate-200 bg-white shadow-sm;
   }
 
   .topbar-button {

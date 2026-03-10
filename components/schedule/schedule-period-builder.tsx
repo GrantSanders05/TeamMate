@@ -1045,23 +1045,39 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         </div>
 
         <aside className="space-y-6">
-          <section className="sticky top-6 rounded-2xl border bg-white p-6 shadow-sm">
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">Balance Snapshot</h2>
-              <p className="text-sm text-slate-500">Live shift and hour totals for the team.</p>
+          <section className="sticky top-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Balance Snapshot</h2>
+                <p className="text-sm text-slate-500">Live shift and hour totals for the team.</p>
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+                {employeeLoads.length} employee{employeeLoads.length === 1 ? "" : "s"}
+              </span>
             </div>
 
             <div className="space-y-3">
               {employeeLoads.length === 0 ? (
-                <div className="text-sm text-slate-500">No employee load data yet.</div>
+                <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+                  No employee load data yet.
+                </div>
               ) : (
                 employeeLoads.map((load: any) => (
-                  <div key={load.user_id} className="rounded-xl border border-slate-200 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="truncate font-medium text-slate-900">{load.display_name}</span>
-                      <span className="text-xs font-semibold text-slate-500">{load.shift_count} shifts</span>
+                  <div key={load.user_id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <span className="block truncate font-medium text-slate-900">{load.display_name}</span>
+                        <span className="mt-1 block text-xs text-slate-500">scheduled load</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                          {load.shiftCount} shift{load.shiftCount === 1 ? "" : "s"}
+                        </span>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                          {Number(load.hours).toFixed(1)} hrs
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-1 text-sm text-slate-500">{load.hours} hrs</div>
                   </div>
                 ))
               )}

@@ -34,6 +34,14 @@ type ProfileRow = {
   updated_at: string
 }
 
+function FieldShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-[24px] border border-slate-200 bg-slate-50/80 p-4 shadow-sm">
+      {children}
+    </div>
+  )
+}
+
 export function ProfileSettingsPage() {
   const supabase = createClient()
   const { organization, refresh } = useOrgSafe()
@@ -82,7 +90,9 @@ export function ProfileSettingsPage() {
 
     const { data: membershipData } = await supabase
       .from("organization_members")
-      .select("id, organization_id, display_name, role, is_active, joined_at, organizations(id, name, join_code)")
+      .select(
+        "id, organization_id, display_name, role, is_active, joined_at, organizations(id, name, join_code)"
+      )
       .eq("user_id", user.id)
       .order("joined_at", { ascending: true })
 
@@ -110,9 +120,7 @@ export function ProfileSettingsPage() {
       updated_at: new Date().toISOString(),
     }
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .upsert(payload)
+    const { error: profileError } = await supabase.from("profiles").upsert(payload)
 
     if (profileError) {
       setSavingProfile(false)
@@ -187,7 +195,7 @@ export function ProfileSettingsPage() {
   }
 
   if (loading) {
-    return <div className="rounded-lg border bg-white p-6">Loading profile...</div>
+    return <div className="rounded-[24px] border border-slate-200 bg-white p-6 shadow-sm">Loading profile...</div>
   }
 
   return (
@@ -199,74 +207,96 @@ export function ProfileSettingsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
-          <SectionCard title="Account Details">
+          <SectionCard title="Account Details" className="rounded-[30px] p-6">
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="profileEmail">Email</Label>
-                <Input id="profileEmail" value={email} disabled />
-              </div>
+              <FieldShell>
+                <Label htmlFor="profileEmail" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Email
+                </Label>
+                <Input id="profileEmail" value={email} disabled className="mt-3 rounded-2xl border-white bg-white" />
+              </FieldShell>
 
-              <div>
-                <Label htmlFor="profileName">Full name</Label>
+              <FieldShell>
+                <Label htmlFor="profileName" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Full name
+                </Label>
                 <Input
                   id="profileName"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="Your name"
+                  className="mt-3 rounded-2xl border-white bg-white"
                 />
-              </div>
+              </FieldShell>
 
-              <div>
-                <Label htmlFor="profileAvatar">Avatar / photo URL</Label>
+              <FieldShell>
+                <Label htmlFor="profileAvatar" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Avatar / photo URL
+                </Label>
                 <Input
                   id="profileAvatar"
                   value={avatarUrl}
                   onChange={(e) => setAvatarUrl(e.target.value)}
                   placeholder="https://..."
+                  className="mt-3 rounded-2xl border-white bg-white"
                 />
-              </div>
+              </FieldShell>
 
-              <div>
-                <Label htmlFor="profileBio">Short bio</Label>
+              <FieldShell>
+                <Label htmlFor="profileBio" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Short bio
+                </Label>
                 <Textarea
                   id="profileBio"
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="A short note about you"
+                  className="mt-3 min-h-[120px] rounded-2xl border-white bg-white"
                 />
-              </div>
+              </FieldShell>
 
-              <Button onClick={() => void saveProfile()} disabled={savingProfile}>
+              <Button onClick={() => void saveProfile()} disabled={savingProfile} className="rounded-2xl px-5">
                 {savingProfile ? "Saving..." : "Save Profile"}
               </Button>
             </div>
           </SectionCard>
 
-          <SectionCard title="Change Password">
+          <SectionCard title="Change Password" className="rounded-[30px] p-6">
             <div className="space-y-4">
-              <div>
-                <Label htmlFor="newPassword">New password</Label>
+              <FieldShell>
+                <Label htmlFor="newPassword" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  New password
+                </Label>
                 <Input
                   id="newPassword"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="New password"
+                  className="mt-3 rounded-2xl border-white bg-white"
                 />
-              </div>
+              </FieldShell>
 
-              <div>
-                <Label htmlFor="confirmPassword">Confirm new password</Label>
+              <FieldShell>
+                <Label htmlFor="confirmPassword" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Confirm new password
+                </Label>
                 <Input
                   id="confirmPassword"
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Confirm password"
+                  className="mt-3 rounded-2xl border-white bg-white"
                 />
-              </div>
+              </FieldShell>
 
-              <Button variant="outline" onClick={() => void updatePassword()} disabled={savingPassword}>
+              <Button
+                variant="outline"
+                onClick={() => void updatePassword()}
+                disabled={savingPassword}
+                className="rounded-2xl px-5"
+              >
                 {savingPassword ? "Updating..." : "Update Password"}
               </Button>
             </div>
@@ -274,26 +304,27 @@ export function ProfileSettingsPage() {
         </div>
 
         <aside className="space-y-6">
-          <SectionCard title="Current Organization">
+          <SectionCard title="Current Organization" className="rounded-[30px] p-6">
             {organization ? (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="rounded-[24px] border border-slate-200 bg-slate-50 p-4 shadow-sm">
                 <div className="font-medium text-slate-900">{organization.name}</div>
-                <div className="mt-1 text-sm text-slate-600">
-                  Join code: {organization.join_code}
-                </div>
+                <div className="mt-1 text-sm text-slate-600">Join code: {organization.join_code}</div>
               </div>
             ) : (
               <div className="text-sm text-slate-500">No organization selected.</div>
             )}
           </SectionCard>
 
-          <SectionCard title="My Organizations">
+          <SectionCard title="My Organizations" className="rounded-[30px] p-6">
             {memberships.length === 0 ? (
               <div className="text-sm text-slate-500">You are not in any organizations yet.</div>
             ) : (
               <div className="space-y-3">
                 {memberships.map((membership) => (
-                  <div key={membership.id} className="rounded-2xl border border-slate-200 p-4">
+                  <div
+                    key={membership.id}
+                    className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-medium text-slate-900">
@@ -303,7 +334,6 @@ export function ProfileSettingsPage() {
                           Display name: {membership.display_name}
                         </div>
                       </div>
-
                       <div
                         className={
                           membership.role === "manager"
@@ -314,7 +344,6 @@ export function ProfileSettingsPage() {
                         {membership.role}
                       </div>
                     </div>
-
                     <div className="mt-3 text-xs text-slate-500">
                       Status: {membership.is_active ? "Active" : "Inactive"}
                     </div>

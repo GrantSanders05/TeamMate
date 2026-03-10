@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
+import { Button } from "@/components/ui/button"
 
 type Shift = {
   id: string
@@ -33,6 +34,12 @@ type PeriodRecord = {
   start_date: string
   end_date: string
   organization_id: string
+}
+
+type DropRequest = {
+  id: string
+  assignment_id: string
+  status: "pending" | "approved" | "denied"
 }
 
 function formatRange(start: string, end: string) {
@@ -76,6 +83,20 @@ function getDaysInRange(startDate: string, endDate: string) {
   return days
 }
 
+function getShiftHours(start: string, end: string) {
+  const [startHour, startMinute] = start.split(":").map(Number)
+  const [endHour, endMinute] = end.split(":").map(Number)
+
+  let startTotal = startHour * 60 + startMinute
+  let endTotal = endHour * 60 + endMinute
+
+  if (endTotal <= startTotal) {
+    endTotal += 24 * 60
+  }
+
+  return (endTotal - startTotal) / 60
+}
+
 export function MySchedulePeriodView({
   periodId,
 }: {
@@ -87,8 +108,10 @@ export function MySchedulePeriodView({
   const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [members, setMembers] = useState<Member[]>([])
+  const [dropRequests, setDropRequests] = useState<DropRequest[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [workingAssignmentId, setWorkingAssignmentId] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
@@ -136,6 +159,7 @@ export function MySchedulePeriodView({
 
       const shiftIds = ((shiftData as Shift[]) || []).map((shift) => shift.id)
       let assignmentData: Assignment[] = []
+      let requestData: DropRequest[] = []
 
       if (shiftIds.length > 0) {
         const { data, error: assignmentError } = await supabase
@@ -153,6 +177,27 @@ export function MySchedulePeriodView({
         }
 
         assignmentData = (data as Assignment[]) || []
+
+        const ownAssignmentIds = assignmentData
+          .filter((assignment) => user?.id && assignment.employee_id === user.id)
+          .map((assignment) => assignment.id)
+
+        if (ownAssignmentIds.length > 0) {
+          const { data: requestsData, error: requestsError } = await supabase
+            .from("drop_requests")
+            .select("id, assignment_id, status")
+            .in("assignment_id", ownAssignmentIds)
+
+          if (requestsError) {
+            if (mounted) {
+              setError(requestsError.message)
+              setLoading(false)
+            }
+            return
+          }
+
+          requestData = (requestsData as DropRequest[]) || []
+        }
       }
 
       if (!mounted) return
@@ -164,6 +209,7 @@ export function MySchedulePeriodView({
         setShifts((shiftData as Shift[]) || [])
         setAssignments(assignmentData)
         setMembers((memberData as Member[]) || [])
+        setDropRequests(requestData)
       }
 
       setLoading(false)
@@ -188,6 +234,16 @@ export function MySchedulePeriodView({
     return map
   }, [assignments])
 
+  const dropRequestsByAssignmentId = useMemo(() => {
+    const map = new Map<string, DropRequest>()
+
+    for (const request of dropRequests) {
+      map.set(request.assignment_id, request)
+    }
+
+    return map
+  }, [dropRequests])
+
   const weekDays = useMemo(() => {
     if (!period?.start_date || !period?.end_date) return []
     return getDaysInRange(period.start_date, period.end_date)
@@ -209,116 +265,243 @@ export function MySchedulePeriodView({
     return grouped
   }, [shifts, weekDays])
 
+  const myAssignments = useMemo(
+    () => assignments.filter((assignment) => currentUserId && assignment.employee_id === currentUserId),
+    [assignments, currentUserId]
+  )
+
+  const myShiftCount = myAssignments.length
+
+  const myExpectedHours = useMemo(
+    () =>
+      myAssignments.reduce((total, assignment) => {
+        const shift = shifts.find((item) => item.id === assignment.shift_id)
+        if (!shift) return total
+        return total + getShiftHours(shift.start_time, shift.end_time)
+      }, 0),
+    [myAssignments, shifts]
+  )
+
   const getDisplayName = (assignment: Assignment) => {
     const member = members.find((item) => item.user_id === assignment.employee_id)
     return member?.display_name || assignment.manual_name || "Assigned"
   }
 
+  async function handleDropShift(assignment: Assignment) {
+    if (!currentUserId) {
+      alert("Unable to identify your account right now.")
+      return
+    }
+
+    const existingRequest = dropRequestsByAssignmentId.get(assignment.id)
+    if (existingRequest?.status === "pending") {
+      alert("You already have a pending drop request for this shift.")
+      return
+    }
+
+    const reason = window.prompt("Add an optional reason for dropping this shift:", "")
+
+    if (reason === null) {
+      return
+    }
+
+    setWorkingAssignmentId(assignment.id)
+
+    const { data: existingPending } = await supabase
+      .from("drop_requests")
+      .select("id, status")
+      .eq("assignment_id", assignment.id)
+      .eq("status", "pending")
+      .maybeSingle()
+
+    if (existingPending) {
+      setWorkingAssignmentId(null)
+      alert("A drop request for this shift is already pending.")
+      return
+    }
+
+    const { error: insertError } = await supabase.from("drop_requests").insert({
+      assignment_id: assignment.id,
+      requested_by: currentUserId,
+      reason: reason.trim() || null,
+      status: "pending",
+    })
+
+    setWorkingAssignmentId(null)
+
+    if (insertError) {
+      alert(insertError.message)
+      return
+    }
+
+    setDropRequests((current) => [
+      ...current.filter((request) => request.assignment_id !== assignment.id),
+      {
+        id: `temp-${assignment.id}`,
+        assignment_id: assignment.id,
+        status: "pending",
+      },
+    ])
+
+    alert("Your drop request was sent to the manager.")
+  }
+
+  const renderShiftCard = (shift: Shift) => {
+    const shiftAssignments = assignmentsByShift.get(shift.id) || []
+
+    return (
+      <div
+        key={shift.id}
+        className="overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      >
+        <div className="flex">
+          <div
+            className="w-1.5 shrink-0"
+            style={{ backgroundColor: shift.color || "#2563EB" }}
+          />
+          <div className="min-w-0 flex-1 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-900">{shift.label}</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">
+                  {formatRange(shift.start_time, shift.end_time)}
+                </p>
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                {shiftAssignments.length} assigned
+              </span>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {shiftAssignments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  No one assigned yet
+                </div>
+              ) : (
+                shiftAssignments.map((assignment) => {
+                  const mine = Boolean(currentUserId && assignment.employee_id === currentUserId)
+                  const dropRequest = dropRequestsByAssignmentId.get(assignment.id)
+                  const canDrop = mine && assignment.status !== "dropped"
+
+                  return (
+                    <div
+                      key={assignment.id}
+                      className={`rounded-2xl px-3 py-3 text-sm ${
+                        mine
+                          ? "bg-blue-600 text-white"
+                          : "border border-slate-200 bg-slate-50 text-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <span className="truncate font-medium block">{getDisplayName(assignment)}</span>
+                        </div>
+                        {mine ? (
+                          <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                            You
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {canDrop ? (
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white/10 px-3 py-2">
+                          <div className="text-xs font-medium text-white/85">
+                            {dropRequest?.status === "pending"
+                              ? "Drop request pending"
+                              : "Need to drop this shift?"}
+                          </div>
+                          <Button
+                            size="sm"
+                            variant={dropRequest?.status === "pending" ? "secondary" : "outline"}
+                            className={`rounded-xl border-0 ${
+                              dropRequest?.status === "pending"
+                                ? "bg-white text-slate-900 hover:bg-white"
+                                : "bg-white text-slate-900 hover:bg-slate-100"
+                            }`}
+                            disabled={Boolean(dropRequest?.status === "pending") || workingAssignmentId === assignment.id}
+                            onClick={() => void handleDropShift(assignment)}
+                          >
+                            {workingAssignmentId === assignment.id
+                              ? "Sending..."
+                              : dropRequest?.status === "pending"
+                                ? "Pending"
+                                : "Drop Shift"}
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <PageShell
-      title={period?.name || "My Schedule"}
-      subtitle="Published team schedule"
-    >
+    <PageShell title={period?.name || "My Schedule"} subtitle="Published team schedule">
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard className="bg-gradient-to-br from-blue-50 via-white to-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Shift Amount</p>
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{myShiftCount}</h2>
+            <p className="text-sm text-slate-500">scheduled this period</p>
+          </div>
+        </SectionCard>
+
+        <SectionCard className="bg-gradient-to-br from-emerald-50 via-white to-white">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">Expected Hours</p>
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <h2 className="text-3xl font-semibold tracking-tight text-slate-900">{myExpectedHours.toFixed(1)}</h2>
+            <p className="text-sm text-slate-500">hours in this schedule</p>
+          </div>
+        </SectionCard>
+      </div>
+
       <SectionCard>
         {error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : loading ? (
           <p className="text-sm text-slate-500">Loading schedule...</p>
         ) : weekDays.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No shifts were found for this published period.
-          </p>
+          <p className="text-sm text-slate-500">No shifts were found for this published period.</p>
         ) : (
           <>
-            <div className="hidden gap-4 xl:grid xl:grid-cols-7">
-              {weekDays.map((day) => {
-                const labels = formatDayLabel(day)
-                const dayShifts = shiftsByDate.get(day) || []
+            <div className="hidden xl:block">
+              <div className="overflow-x-auto pb-2">
+                <div className="grid min-w-[1180px] grid-cols-7 gap-4">
+                  {weekDays.map((day) => {
+                    const labels = formatDayLabel(day)
+                    const dayShifts = shiftsByDate.get(day) || []
 
-                return (
-                  <div
-                    key={day}
-                    className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
-                  >
-                    <div className="mb-4">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
-                        {labels.short}
-                      </p>
-                      <h3 className="text-base font-semibold text-slate-900">
-                        {labels.long}
-                      </h3>
-                    </div>
-
-                    <div className="space-y-3">
-                      {dayShifts.length === 0 ? (
-                        <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
-                          No shifts
+                    return (
+                      <div
+                        key={day}
+                        className="flex min-h-[420px] min-w-0 flex-col rounded-[28px] border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4 shadow-sm"
+                      >
+                        <div className="mb-4 rounded-[22px] border border-slate-200 bg-white px-4 py-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                            {labels.short}
+                          </p>
+                          <h3 className="text-base font-semibold text-slate-900">{labels.long}</h3>
                         </div>
-                      ) : (
-                        dayShifts.map((shift) => {
-                          const shiftAssignments = assignmentsByShift.get(shift.id) || []
 
-                          return (
-                            <div
-                              key={shift.id}
-                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm"
-                            >
-                              <div className="flex">
-                                <div
-                                  className="w-1.5 shrink-0"
-                                  style={{ backgroundColor: shift.color || "#2563EB" }}
-                                />
-                                <div className="min-w-0 flex-1 p-4">
-                                  <p className="truncate text-sm font-semibold text-slate-900">
-                                    {shift.label}
-                                  </p>
-                                  <p className="mt-1 text-xs font-medium text-slate-500">
-                                    {formatRange(shift.start_time, shift.end_time)}
-                                  </p>
-
-                                  <div className="mt-3 space-y-2">
-                                    {shiftAssignments.length === 0 ? (
-                                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                                        No one assigned yet
-                                      </div>
-                                    ) : (
-                                      shiftAssignments.map((assignment) => {
-                                        const mine = Boolean(
-                                          currentUserId && assignment.employee_id === currentUserId
-                                        )
-
-                                        return (
-                                          <div
-                                            key={assignment.id}
-                                            className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-2 text-sm ${
-                                              mine
-                                                ? "bg-blue-600 text-white"
-                                                : "border border-slate-200 bg-slate-50 text-slate-700"
-                                            }`}
-                                          >
-                                            <span className="truncate font-medium">
-                                              {getDisplayName(assignment)}
-                                            </span>
-                                            {mine ? (
-                                              <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                                                You
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                        )
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
+                        <div className="space-y-3">
+                          {dayShifts.length === 0 ? (
+                            <div className="rounded-[22px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
+                              No shifts
                             </div>
-                          )
-                        })
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+                          ) : (
+                            dayShifts.map((shift) => renderShiftCard(shift))
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="space-y-4 xl:hidden">
@@ -329,15 +512,13 @@ export function MySchedulePeriodView({
                 return (
                   <div
                     key={day}
-                    className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                    className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm"
                   >
-                    <div className="mb-4">
+                    <div className="mb-4 rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3">
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                         {labels.short}
                       </p>
-                      <h3 className="text-base font-semibold text-slate-900">
-                        {labels.long}
-                      </h3>
+                      <h3 className="text-base font-semibold text-slate-900">{labels.long}</h3>
                     </div>
 
                     <div className="space-y-3">
@@ -346,65 +527,7 @@ export function MySchedulePeriodView({
                           No shifts
                         </div>
                       ) : (
-                        dayShifts.map((shift) => {
-                          const shiftAssignments = assignmentsByShift.get(shift.id) || []
-
-                          return (
-                            <div
-                              key={shift.id}
-                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm"
-                            >
-                              <div className="flex">
-                                <div
-                                  className="w-1.5 shrink-0"
-                                  style={{ backgroundColor: shift.color || "#2563EB" }}
-                                />
-                                <div className="min-w-0 flex-1 p-4">
-                                  <p className="truncate text-sm font-semibold text-slate-900">
-                                    {shift.label}
-                                  </p>
-                                  <p className="mt-1 text-xs font-medium text-slate-500">
-                                    {formatRange(shift.start_time, shift.end_time)}
-                                  </p>
-
-                                  <div className="mt-3 space-y-2">
-                                    {shiftAssignments.length === 0 ? (
-                                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                                        No one assigned yet
-                                      </div>
-                                    ) : (
-                                      shiftAssignments.map((assignment) => {
-                                        const mine = Boolean(
-                                          currentUserId && assignment.employee_id === currentUserId
-                                        )
-
-                                        return (
-                                          <div
-                                            key={assignment.id}
-                                            className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-2 text-sm ${
-                                              mine
-                                                ? "bg-blue-600 text-white"
-                                                : "border border-slate-200 bg-slate-50 text-slate-700"
-                                            }`}
-                                          >
-                                            <span className="truncate font-medium">
-                                              {getDisplayName(assignment)}
-                                            </span>
-                                            {mine ? (
-                                              <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
-                                                You
-                                              </span>
-                                            ) : null}
-                                          </div>
-                                        )
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })
+                        dayShifts.map((shift) => renderShiftCard(shift))
                       )}
                     </div>
                   </div>

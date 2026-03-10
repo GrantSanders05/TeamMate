@@ -4,6 +4,7 @@ import type { ReactNode } from "react"
 import { MobileNav } from "@/components/layout/mobile-nav"
 import { Sidebar } from "@/components/layout/sidebar"
 import { TopBar } from "@/components/layout/top-bar"
+import { AppFooter } from "@/components/layout/app-footer"
 import { OrgProvider } from "@/lib/hooks/use-organization"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 
@@ -18,15 +19,13 @@ function AppShellInner({
   const fontFamily = organization?.font_family || "Inter"
 
   return (
-    <div
-      className="min-h-screen bg-slate-50 text-slate-900"
-      style={{ fontFamily }}
-    >
+    <div className="min-h-screen bg-slate-50 text-slate-900" style={{ fontFamily }}>
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="flex min-h-screen min-w-0 flex-1 flex-col">
           <TopBar />
-          <main className="flex-1 pb-24 md:pb-8">{children}</main>
+          <main className="flex-1 pb-24 md:pb-10">{children}</main>
+          <AppFooter />
         </div>
       </div>
       <MobileNav />

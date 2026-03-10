@@ -3,9 +3,19 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/shared/page-shell"
+import { SectionCard } from "@/components/shared/section-card"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { formatDateReadable } from "@/lib/schedule/time-format"
+
+type ArchiveSnapshotPeriod = {
+  id?: string
+  name?: string
+  start_date?: string
+  end_date?: string
+  status?: string
+}
 
 type ArchiveRow = {
   id: string
@@ -13,14 +23,14 @@ type ArchiveRow = {
   organization_id: string
   archived_at: string
   snapshot_data: {
-    period?: {
-      id: string
-      name: string
-      start_date: string
-      end_date: string
-      status: string
-    }
+    period?: ArchiveSnapshotPeriod
   } | null
+}
+
+function archivedWindowLabel(period?: ArchiveSnapshotPeriod) {
+  if (!period?.start_date) return "Unknown date range"
+  if (!period?.end_date) return formatDateReadable(period.start_date)
+  return `${formatDateReadable(period.start_date)} – ${formatDateReadable(period.end_date)}`
 }
 
 export function HistoryPage() {
@@ -29,6 +39,7 @@ export function HistoryPage() {
 
   const [archives, setArchives] = useState<ArchiveRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   async function loadArchives() {
     if (!organization) {
@@ -52,7 +63,7 @@ export function HistoryPage() {
       return
     }
 
-    setArchives((data as ArchiveRow[]) || [])
+    setArchives((data as ArchiveRow[]) ?? [])
     setLoading(false)
   }
 
@@ -60,85 +71,119 @@ export function HistoryPage() {
     void loadArchives()
   }, [organization?.id])
 
-  async function deleteArchive(archiveId: string) {
-    const confirmed = window.confirm("Delete this archive permanently?")
+  async function deleteArchive(archive: ArchiveRow) {
+    if (!organization || !isManager) return
+
+    const periodName = archive.snapshot_data?.period?.name || "this archived schedule"
+    const confirmed = window.confirm(
+      `Delete ${periodName}? This permanently removes the archived snapshot.`
+    )
+
     if (!confirmed) return
 
-    const { error } = await supabase
-      .from("schedule_archives")
-      .delete()
-      .eq("id", archiveId)
+    try {
+      setDeletingId(archive.id)
 
-    if (error) {
-      alert(error.message)
-      return
+      const { error } = await supabase
+        .from("schedule_archives")
+        .delete()
+        .eq("id", archive.id)
+        .eq("organization_id", organization.id)
+
+      if (error) {
+        throw error
+      }
+
+      setArchives((current) => current.filter((item) => item.id !== archive.id))
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not delete the archive.")
+    } finally {
+      setDeletingId(null)
     }
-
-    await loadArchives()
   }
 
   if (!organization) {
-    return <div className="rounded-lg border bg-white p-6">No organization selected.</div>
+    return (
+      <PageShell title="Schedule History" subtitle="Archived schedules appear here once they are moved out of active scheduling.">
+        <SectionCard>
+          <p className="text-sm text-slate-600">No organization selected.</p>
+        </SectionCard>
+      </PageShell>
+    )
   }
 
   if (!isManager) {
-    return <div className="rounded-lg border bg-white p-6">Only managers can view schedule history.</div>
-  }
-
-  if (loading) {
-    return <div className="rounded-lg border bg-white p-6">Loading history...</div>
+    return (
+      <PageShell title="Schedule History" subtitle="Archived schedules appear here once they are moved out of active scheduling.">
+        <SectionCard>
+          <p className="text-sm text-slate-600">Only managers can manage archived schedules.</p>
+        </SectionCard>
+      </PageShell>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-6">
-        <h1 className="text-2xl font-semibold">Schedule History</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Archived schedule periods live here so you can review older schedules any time.
-        </p>
-      </div>
-
-      <div className="rounded-lg border bg-white p-6">
-        {archives.length === 0 ? (
-          <div className="text-sm text-slate-600">
-            No archived schedule periods yet. Publish a schedule and archive it from the schedule builder.
-          </div>
+    <PageShell
+      title="Schedule History"
+      subtitle="View and clean up archived schedules without mixing them into active scheduling."
+    >
+      <SectionCard>
+        {loading ? (
+          <p className="text-sm text-slate-600">Loading history...</p>
+        ) : archives.length === 0 ? (
+          <p className="text-sm text-slate-600">
+            No archived schedule periods yet. Archive a finished schedule and it will show up here.
+          </p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {archives.map((archive) => {
               const period = archive.snapshot_data?.period
+
               return (
                 <div
                   key={archive.id}
-                  className="flex flex-col gap-3 rounded-lg border p-4 md:flex-row md:items-center md:justify-between"
+                  className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
                 >
-                  <div>
-                    <div className="font-medium text-slate-900">
-                      {period?.name || "Archived Schedule"}
-                    </div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      {period?.start_date ? formatDateReadable(period.start_date) : "Unknown"}{" "}
-                      {period?.end_date ? `– ${formatDateReadable(period.end_date)}` : ""}
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                      Archived: {new Date(archive.archived_at).toLocaleString()}
-                    </div>
-                  </div>
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div className="space-y-2">
+                      <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                        Archived
+                      </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline">
-                      <Link href={`/history/${archive.id}`}>View</Link>
-                    </Button>
-                    <Button variant="destructive" onClick={() => void deleteArchive(archive.id)}>
-                      Delete
-                    </Button>
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          {period?.name || "Archived Schedule"}
+                        </h3>
+                        <p className="text-sm text-slate-600">
+                          {archivedWindowLabel(period)}
+                        </p>
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        Archived on {new Date(archive.archived_at).toLocaleString()}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="outline">
+                        <Link href={`/history/${archive.id}`}>View archive</Link>
+                      </Button>
+
+                      <Button
+                        variant="destructive"
+                        onClick={() => void deleteArchive(archive)}
+                        disabled={deletingId === archive.id}
+                      >
+                        {deletingId === archive.id ? "Deleting..." : "Delete archive"}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               )
             })}
           </div>
         )}
-      </div>
-    </div>
+      </SectionCard>
+    </PageShell>
   )
 }

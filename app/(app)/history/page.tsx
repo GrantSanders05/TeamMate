@@ -1,5 +1,5 @@
-import { ScheduleArchivesPage } from "@/components/schedule/schedule-archives-page"
+import { HistoryPage } from "@/components/history/history-page"
 
-export default function HistoryPage() {
-  return <ScheduleArchivesPage />
+export default function Page() {
+  return <HistoryPage />
 }

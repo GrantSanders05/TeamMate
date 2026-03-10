@@ -1,8 +1,6 @@
-"use client"
-
 import { HistoryDetailPage } from "@/components/history/history-detail-page"
 
-export default function ArchiveDetailPage({
+export default function ArchiveDetailRoute({
   params,
 }: {
   params: { archiveId: string }

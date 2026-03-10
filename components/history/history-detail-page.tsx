@@ -1,7 +1,10 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { PageShell } from "@/components/shared/page-shell"
+import { SectionCard } from "@/components/shared/section-card"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { openSchedulePrintWindow } from "@/lib/schedule/print-export"
@@ -9,11 +12,11 @@ import { formatDateReadable, formatTimeRange } from "@/lib/schedule/time-format"
 
 type ArchivePayload = {
   period?: {
-    id: string
-    name: string
-    start_date: string
-    end_date: string
-    status: string
+    id?: string
+    name?: string
+    start_date?: string
+    end_date?: string
+    status?: string
   }
   shifts?: Array<{
     id: string
@@ -47,18 +50,20 @@ type ArchiveRow = {
 const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
 function weekday(dateString: string) {
-  const date = new Date(dateString + "T00:00:00")
+  const date = new Date(`${dateString}T00:00:00`)
   return weekdayLabels[date.getDay()]
 }
 
 function getDatesInRange(start: string, end: string) {
   const results: string[] = []
-  const current = new Date(start + "T00:00:00")
-  const last = new Date(end + "T00:00:00")
+  const current = new Date(`${start}T00:00:00`)
+  const last = new Date(`${end}T00:00:00`)
+
   while (current <= last) {
     results.push(current.toISOString().slice(0, 10))
     current.setDate(current.getDate() + 1)
   }
+
   return results
 }
 
@@ -72,6 +77,7 @@ export function HistoryDetailPage({ archiveId }: { archiveId: string }) {
 
   async function loadArchive() {
     if (!organization) {
+      setArchive(null)
       setLoading(false)
       return
     }
@@ -129,10 +135,10 @@ export function HistoryDetailPage({ archiveId }: { archiveId: string }) {
   }
 
   function exportArchive() {
-    if (!period || !organization) return
+    if (!period || !organization || !period.start_date || !period.end_date) return
 
     openSchedulePrintWindow({
-      title: `${organization.name} — ${period.name}`,
+      title: `${organization.name} — ${period.name || "Archived Schedule"}`,
       subtitle: `${formatDateReadable(period.start_date)} – ${formatDateReadable(period.end_date)} · Archived`,
       shifts,
       assignments,
@@ -148,22 +154,35 @@ export function HistoryDetailPage({ archiveId }: { archiveId: string }) {
     return (
       <div
         key={shift.id}
-        className="rounded-lg border p-3"
-        style={{ borderLeftWidth: "6px", borderLeftColor: shift.color || "#3B82F6" }}
+        className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
       >
-        <div className="font-medium text-slate-900">{shift.label}</div>
-        <div className="mt-1 text-xs text-slate-600">
-          {formatTimeRange(shift.start_time, shift.end_time)}
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="font-medium text-slate-900">{shift.label}</p>
+            <p className="text-sm text-slate-600">
+              {formatTimeRange(shift.start_time, shift.end_time)}
+            </p>
+          </div>
+
+          <div className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-600">
+            Need {shift.required_workers}
+          </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+
+        <div className="mt-3">
           {assigned.length === 0 ? (
-            <span className="text-xs text-slate-500">No one assigned.</span>
+            <p className="text-sm text-slate-500">No one assigned.</p>
           ) : (
-            assigned.map((name, idx) => (
-              <span key={`${shift.id}-${idx}`} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
-                {name}
-              </span>
-            ))
+            <div className="flex flex-wrap gap-2">
+              {assigned.map((name, idx) => (
+                <span
+                  key={`${shift.id}-${idx}`}
+                  className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200"
+                >
+                  {name}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -171,101 +190,121 @@ export function HistoryDetailPage({ archiveId }: { archiveId: string }) {
   }
 
   if (!organization) {
-    return <div className="rounded-lg border bg-white p-6">No organization selected.</div>
+    return (
+      <PageShell title="Archived schedule" subtitle="Review a previously archived schedule.">
+        <SectionCard>
+          <p className="text-sm text-slate-600">No organization selected.</p>
+        </SectionCard>
+      </PageShell>
+    )
   }
 
   if (!isManager) {
-    return <div className="rounded-lg border bg-white p-6">Only managers can view archived schedules.</div>
+    return (
+      <PageShell title="Archived schedule" subtitle="Review a previously archived schedule.">
+        <SectionCard>
+          <p className="text-sm text-slate-600">Only managers can view archived schedules.</p>
+        </SectionCard>
+      </PageShell>
+    )
   }
 
   if (loading) {
-    return <div className="rounded-lg border bg-white p-6">Loading archive...</div>
+    return (
+      <PageShell title="Archived schedule" subtitle="Review a previously archived schedule.">
+        <SectionCard>
+          <p className="text-sm text-slate-600">Loading archive...</p>
+        </SectionCard>
+      </PageShell>
+    )
   }
 
-  if (!archive || !period) {
-    return <div className="rounded-lg border bg-white p-6">Archive not found.</div>
+  if (!archive || !period || !period.start_date || !period.end_date) {
+    return (
+      <PageShell title="Archived schedule" subtitle="Review a previously archived schedule.">
+        <SectionCard>
+          <p className="text-sm text-slate-600">Archive not found.</p>
+          <div className="mt-4">
+            <Button asChild variant="outline">
+              <Link href="/history">Back to history</Link>
+            </Button>
+          </div>
+        </SectionCard>
+      </PageShell>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">{period.name}</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              {formatDateReadable(period.start_date)} – {formatDateReadable(period.end_date)} · Archived
-            </p>
-            <p className="mt-2 text-xs text-slate-500">
-              Archived on {new Date(archive.archived_at).toLocaleString()}
-            </p>
-          </div>
-
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant={viewMode === "calendar" ? "default" : "outline"}
-              onClick={() => setViewMode("calendar")}
-            >
-              Weekly Calendar
-            </Button>
-            <Button
-              type="button"
-              variant={viewMode === "list" ? "default" : "outline"}
-              onClick={() => setViewMode("list")}
-            >
-              List View
-            </Button>
-            <Button type="button" variant="outline" onClick={exportArchive}>
-              Export / Print
-            </Button>
-          </div>
+    <PageShell
+      title={period.name || "Archived Schedule"}
+      subtitle={`${formatDateReadable(period.start_date)} – ${formatDateReadable(period.end_date)}`}
+      actions={
+        <div className="flex flex-wrap gap-2">
+          <Button variant={viewMode === "calendar" ? "default" : "outline"} onClick={() => setViewMode("calendar")}>
+            Weekly Calendar
+          </Button>
+          <Button variant={viewMode === "list" ? "default" : "outline"} onClick={() => setViewMode("list")}>
+            List View
+          </Button>
+          <Button variant="outline" onClick={exportArchive}>
+            Export / Print
+          </Button>
+          <Button asChild variant="ghost">
+            <Link href="/history">Back</Link>
+          </Button>
         </div>
-      </div>
-
-      {viewMode === "calendar" ? (
-        <div className="rounded-lg border bg-white p-6">
-          <h2 className="text-lg font-semibold">Archived Calendar View</h2>
-
-          <div className="mt-4 overflow-x-auto">
-            <div className="grid min-w-[1100px] grid-cols-7 gap-4">
-              {calendarDates.map((date) => (
-                <div key={date} className="rounded-lg border bg-slate-50 p-3">
-                  <div className="border-b pb-2">
-                    <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {weekday(date)}
-                    </div>
-                    <div className="mt-1 text-sm font-medium text-slate-900">
-                      {formatDateReadable(date)}
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-3">
-                    {(shiftsByDate[date] || []).length === 0 ? (
-                      <div className="rounded-lg border border-dashed bg-white p-3 text-xs text-slate-500">
-                        No shifts
-                      </div>
-                    ) : (
-                      (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
-                    )}
-                  </div>
+      }
+    >
+      <SectionCard
+        title="Archive snapshot"
+        description={`Archived on ${new Date(archive.archived_at).toLocaleString()}`}
+      >
+        {viewMode === "calendar" ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {calendarDates.map((date) => (
+              <div
+                key={date}
+                className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <div className="mb-3">
+                  <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    {weekday(date)}
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900">{formatDateReadable(date)}</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-lg border bg-white p-6">
-          <h2 className="text-lg font-semibold">Archived List View</h2>
 
-          {shifts.length === 0 ? (
-            <div className="mt-4 text-sm text-slate-600">No shifts in this archive.</div>
-          ) : (
-            <div className="mt-4 space-y-4">
-              {shifts.map((shift) => renderShiftCard(shift))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+                <div className="space-y-3">
+                  {(shiftsByDate[date] || []).length === 0 ? (
+                    <p className="text-sm text-slate-500">No shifts</p>
+                  ) : (
+                    (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {shifts.length === 0 ? (
+              <p className="text-sm text-slate-500">No shifts in this archive.</p>
+            ) : (
+              shifts.map((shift) => (
+                <div key={shift.id} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="mb-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                      {weekday(shift.date)}
+                    </p>
+                    <p className="text-sm font-semibold text-slate-900">
+                      {formatDateReadable(shift.date)}
+                    </p>
+                  </div>
+                  {renderShiftCard(shift)}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </SectionCard>
+    </PageShell>
   )
 }

@@ -23,6 +23,10 @@ textarea {
   font: inherit;
 }
 
+button {
+  @apply rounded-2xl;
+}
+
 a {
   @apply text-inherit no-underline;
 }
@@ -52,5 +56,9 @@ a {
 
   .topbar-button {
     @apply rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50;
+  }
+
+  .pill-button {
+    @apply inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition;
   }
 }

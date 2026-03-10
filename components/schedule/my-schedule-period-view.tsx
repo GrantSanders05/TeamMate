@@ -2,16 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
 
-type ShiftCard = {
+type Shift = {
   id: string
   date: string
   label: string
   start_time: string
   end_time: string
+  color?: string | null
 }
 
 type Assignment = {
@@ -24,28 +24,51 @@ type Assignment = {
 
 type Member = {
   user_id: string
-  display_name: string
+  display_name: string | null
 }
 
-function formatDate(value: string) {
-  const date = new Date(`${value}T12:00:00`)
-  return date.toLocaleDateString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  })
+type PeriodRecord = {
+  id: string
+  name: string
+  start_date: string
+  end_date: string
 }
 
-function formatTimeRange(start: string, end: string) {
-  const normalize = (value: string) => {
+function formatRange(start: string, end: string) {
+  const clean = (value: string) => {
     const [hourRaw, minute = "00"] = value.split(":")
-    const hourNum = Number(hourRaw)
-    const suffix = hourNum >= 12 ? "PM" : "AM"
-    const twelveHour = hourNum % 12 || 12
-    return `${twelveHour}:${minute.slice(0, 2)} ${suffix}`
+    const hour = Number(hourRaw)
+    const suffix = hour >= 12 ? "PM" : "AM"
+    const normalized = hour % 12 || 12
+    return `${normalized}:${minute.slice(0, 2)} ${suffix}`
   }
 
-  return `${normalize(start)} – ${normalize(end)}`
+  return `${clean(start)} – ${clean(end)}`
+}
+
+function formatDayLabel(value: string) {
+  try {
+    const date = new Date(`${value}T12:00:00`)
+    return {
+      short: date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase(),
+      long: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+    }
+  } catch {
+    return { short: value, long: value }
+  }
+}
+
+function getDaysInRange(startDate: string, endDate: string) {
+  const days: string[] = []
+  const cursor = new Date(`${startDate}T12:00:00`)
+  const end = new Date(`${endDate}T12:00:00`)
+
+  while (cursor <= end) {
+    days.push(cursor.toISOString().slice(0, 10))
+    cursor.setDate(cursor.getDate() + 1)
+  }
+
+  return days
 }
 
 export default function MySchedulePeriodView({
@@ -53,187 +76,317 @@ export default function MySchedulePeriodView({
 }: {
   periodId: string
 }) {
-  const supabase = createClient()
-  const { organization, userId } = useOrgSafe()
+  const supabase = useMemo(() => createClient(), [])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [periodName, setPeriodName] = useState("Schedule")
-  const [shifts, setShifts] = useState<ShiftCard[]>([])
+  const [period, setPeriod] = useState<PeriodRecord | null>(null)
+  const [shifts, setShifts] = useState<Shift[]>([])
   const [assignments, setAssignments] = useState<Assignment[]>([])
   const [members, setMembers] = useState<Member[]>([])
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let mounted = true
 
-    async function load() {
+    async function loadData() {
       setLoading(true)
       setError(null)
 
-      const [{ data: periodData, error: periodError }, { data: shiftData, error: shiftError }, { data: assignmentData, error: assignmentError }, { data: memberData, error: memberError }] = await Promise.all([
-        supabase
-          .from("scheduling_periods")
-          .select("id, name, organization_id")
-          .eq("id", periodId)
-          .maybeSingle(),
-        supabase
-          .from("shifts")
-          .select("id, date, label, start_time, end_time")
-          .eq("scheduling_period_id", periodId)
-          .order("date", { ascending: true })
-          .order("start_time", { ascending: true }),
-        supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (mounted) {
+        setCurrentUserId(user?.id ?? null)
+      }
+
+      const { data: periodData, error: periodError } = await supabase
+        .from("scheduling_periods")
+        .select("id, name, start_date, end_date, organization_id")
+        .eq("id", periodId)
+        .maybeSingle()
+
+      if (periodError || !periodData) {
+        if (mounted) {
+          setError(periodError?.message || "Unable to load schedule period.")
+          setLoading(false)
+        }
+        return
+      }
+
+      const [{ data: shiftData, error: shiftError }, { data: memberData, error: memberError }] =
+        await Promise.all([
+          supabase
+            .from("shifts")
+            .select("id, date, label, start_time, end_time, color")
+            .eq("scheduling_period_id", periodId)
+            .order("date", { ascending: true })
+            .order("start_time", { ascending: true }),
+          supabase
+            .from("organization_members")
+            .select("user_id, display_name")
+            .eq("organization_id", periodData.organization_id)
+            .eq("is_active", true),
+        ])
+
+      const shiftIds = ((shiftData as Shift[]) || []).map((shift) => shift.id)
+      let assignmentData: Assignment[] = []
+
+      if (shiftIds.length > 0) {
+        const { data, error: assignmentError } = await supabase
           .from("shift_assignments")
           .select("id, shift_id, employee_id, manual_name, status")
-          .in("shift_id",
-              (await supabase
-                .from("shifts")
-                .select("id")
-                .eq("scheduling_period_id", periodId)).data?.map((s: any) => s.id) || ["00000000-0000-0000-0000-000000000000"]),
-        supabase
-          .from("organization_members")
-          .select("user_id, display_name")
-          .eq("organization_id", organization?.id || "")
-          .eq("is_active", true),
-      ])
+          .in("shift_id", shiftIds)
+          .neq("status", "dropped")
+
+        if (assignmentError) {
+          if (mounted) {
+            setError(assignmentError.message)
+            setLoading(false)
+          }
+          return
+        }
+
+        assignmentData = (data as Assignment[]) || []
+      }
 
       if (!mounted) return
 
-      if (periodError || shiftError || assignmentError || memberError) {
-        setError(
-          periodError?.message ||
-          shiftError?.message ||
-          assignmentError?.message ||
-          memberError?.message ||
-          "Unable to load schedule."
-        )
+      if (shiftError || memberError) {
+        setError(shiftError?.message || memberError?.message || "Unable to load schedule.")
       } else {
-        setPeriodName(periodData?.name || "Schedule")
-        setShifts((shiftData || []) as ShiftCard[])
-        setAssignments((assignmentData || []) as Assignment[])
-        setMembers((memberData || []) as Member[])
+        setPeriod((periodData as PeriodRecord) || null)
+        setShifts((shiftData as Shift[]) || [])
+        setAssignments(assignmentData)
+        setMembers((memberData as Member[]) || [])
       }
 
       setLoading(false)
     }
 
-    if (organization) {
-      void load()
-    } else {
-      setLoading(false)
-    }
-
+    void loadData()
     return () => {
       mounted = false
     }
-  }, [periodId, organization?.id, supabase])
+  }, [periodId, supabase])
 
-  const grouped = useMemo(() => {
-    const assignmentMap = new Map<string, Assignment[]>()
+  const assignmentsByShift = useMemo(() => {
+    const map = new Map<string, Assignment[]>()
 
     for (const assignment of assignments) {
-      if (assignment.status === "dropped") continue
-      const list = assignmentMap.get(assignment.shift_id) || []
+      const list = map.get(assignment.shift_id) || []
       list.push(assignment)
-      assignmentMap.set(assignment.shift_id, list)
+      map.set(assignment.shift_id, list)
     }
 
-    const byDate = new Map<string, Array<ShiftCard & { assignments: Assignment[] }>>()
+    return map
+  }, [assignments])
+
+  const weekDays = useMemo(() => {
+    if (!period?.start_date || !period?.end_date) return []
+    return getDaysInRange(period.start_date, period.end_date)
+  }, [period?.start_date, period?.end_date])
+
+  const shiftsByDate = useMemo(() => {
+    const grouped = new Map<string, Shift[]>()
+
+    for (const day of weekDays) {
+      grouped.set(day, [])
+    }
 
     for (const shift of shifts) {
-      const list = byDate.get(shift.date) || []
-      list.push({
-        ...shift,
-        assignments: assignmentMap.get(shift.id) || [],
-      })
-      byDate.set(shift.date, list)
+      const list = grouped.get(shift.date) || []
+      list.push(shift)
+      grouped.set(shift.date, list)
     }
 
-    return Array.from(byDate.entries()).map(([date, dayShifts]) => ({
-      date,
-      shifts: dayShifts,
-    }))
-  }, [shifts, assignments])
+    return grouped
+  }, [shifts, weekDays])
 
-  function getAssignmentName(assignment: Assignment) {
-    if (assignment.manual_name) return assignment.manual_name
+  const getDisplayName = (assignment: Assignment) => {
     const member = members.find((item) => item.user_id === assignment.employee_id)
-    return member?.display_name || "Assigned"
+    return member?.display_name || assignment.manual_name || "Assigned"
   }
 
   return (
     <PageShell
-      title={periodName}
+      title={period?.name || "My Schedule"}
       subtitle="Published team schedule"
     >
       <SectionCard>
-        {loading ? (
-          <p className="text-sm text-slate-500">Loading schedule…</p>
-        ) : error ? (
+        {!period && !loading && error ? (
           <p className="text-sm text-red-600">{error}</p>
-        ) : grouped.length === 0 ? (
-          <p className="text-sm text-slate-500">No shifts found for this schedule yet.</p>
+        ) : loading ? (
+          <p className="text-sm text-slate-500">Loading schedule...</p>
+        ) : weekDays.length === 0 ? (
+          <p className="text-sm text-slate-500">No shifts were found for this published period.</p>
         ) : (
-          <div className="space-y-4">
-            {grouped.map((day) => (
-              <div key={day.date} className="soft-card p-4 sm:p-5">
-                <div className="mb-4">
-                  <h3 className="text-base font-semibold text-slate-900">{formatDate(day.date)}</h3>
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">
-                    {day.shifts.length} {day.shifts.length === 1 ? "shift" : "shifts"}
-                  </p>
-                </div>
+          <>
+            <div className="hidden gap-4 xl:grid xl:grid-cols-7">
+              {weekDays.map((day) => {
+                const labels = formatDayLabel(day)
+                const dayShifts = shiftsByDate.get(day) || []
 
-                <div className="grid gap-3 xl:grid-cols-2">
-                  {day.shifts.map((shift) => (
-                    <div
-                      key={shift.id}
-                      className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50"
-                    >
-                      <div className="border-b border-slate-200 bg-white px-4 py-3">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <p className="font-semibold text-slate-900">{shift.label}</p>
-                            <p className="mt-1 text-sm text-slate-600">
-                              {formatTimeRange(shift.start_time, shift.end_time)}
-                            </p>
-                          </div>
-                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
-                            {shift.assignments.length} assigned
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="px-4 py-3">
-                        {shift.assignments.length === 0 ? (
-                          <p className="text-sm text-slate-500">No one assigned yet.</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-2">
-                            {shift.assignments.map((assignment) => {
-                              const name = getAssignmentName(assignment)
-                              const mine = Boolean(userId && assignment.employee_id === userId)
-
-                              return (
-                                <span
-                                  key={assignment.id}
-                                  className={`rounded-full px-3 py-1.5 text-sm font-medium ${
-                                    mine
-                                      ? "bg-blue-600 text-white"
-                                      : "bg-white text-slate-700 border border-slate-200"
-                                  }`}
-                                >
-                                  {name}
-                                </span>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
+                return (
+                  <div
+                    key={day}
+                    className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        {labels.short}
+                      </p>
+                      <h3 className="text-lg font-semibold text-slate-900">{labels.long}</h3>
                     </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
+
+                    <div className="space-y-3">
+                      {dayShifts.length === 0 ? (
+                        <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
+                          No shifts
+                        </div>
+                      ) : (
+                        dayShifts.map((shift) => {
+                          const shiftAssignments = assignmentsByShift.get(shift.id) || []
+
+                          return (
+                            <div
+                              key={shift.id}
+                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 shadow-sm"
+                            >
+                              <div className="flex">
+                                <div
+                                  className="w-1.5 shrink-0"
+                                  style={{ backgroundColor: shift.color || "#2563EB" }}
+                                />
+                                <div className="min-w-0 flex-1 p-4">
+                                  <p className="truncate text-sm font-semibold text-slate-900">
+                                    {shift.label}
+                                  </p>
+                                  <p className="mt-1 text-xs font-medium text-slate-500">
+                                    {formatRange(shift.start_time, shift.end_time)}
+                                  </p>
+
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {shiftAssignments.length === 0 ? (
+                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">
+                                        No one assigned yet
+                                      </span>
+                                    ) : (
+                                      shiftAssignments.map((assignment) => {
+                                        const mine = Boolean(
+                                          currentUserId && assignment.employee_id === currentUserId
+                                        )
+
+                                        return (
+                                          <span
+                                            key={assignment.id}
+                                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                                              mine
+                                                ? "bg-blue-600 text-white"
+                                                : "border border-slate-200 bg-white text-slate-700"
+                                            }`}
+                                          >
+                                            {getDisplayName(assignment)}
+                                          </span>
+                                        )
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="space-y-4 xl:hidden">
+              {weekDays.map((day) => {
+                const labels = formatDayLabel(day)
+                const dayShifts = shiftsByDate.get(day) || []
+
+                return (
+                  <div key={day} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                    <div className="mb-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                        {labels.short}
+                      </p>
+                      <h3 className="text-lg font-semibold text-slate-900">{labels.long}</h3>
+                    </div>
+
+                    <div className="space-y-3">
+                      {dayShifts.length === 0 ? (
+                        <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-400">
+                          No shifts
+                        </div>
+                      ) : (
+                        dayShifts.map((shift) => {
+                          const shiftAssignments = assignmentsByShift.get(shift.id) || []
+
+                          return (
+                            <div
+                              key={shift.id}
+                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 shadow-sm"
+                            >
+                              <div className="flex">
+                                <div
+                                  className="w-1.5 shrink-0"
+                                  style={{ backgroundColor: shift.color || "#2563EB" }}
+                                />
+                                <div className="min-w-0 flex-1 p-4">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-semibold text-slate-900">
+                                        {shift.label}
+                                      </p>
+                                      <p className="mt-1 text-xs font-medium text-slate-500">
+                                        {formatRange(shift.start_time, shift.end_time)}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {shiftAssignments.length === 0 ? (
+                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">
+                                        No one assigned yet
+                                      </span>
+                                    ) : (
+                                      shiftAssignments.map((assignment) => {
+                                        const mine = Boolean(
+                                          currentUserId && assignment.employee_id === currentUserId
+                                        )
+
+                                        return (
+                                          <span
+                                            key={assignment.id}
+                                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                                              mine
+                                                ? "bg-blue-600 text-white"
+                                                : "border border-slate-200 bg-white text-slate-700"
+                                            }`}
+                                          >
+                                            {getDisplayName(assignment)}
+                                          </span>
+                                        )
+                                      })
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </>
         )}
       </SectionCard>
     </PageShell>

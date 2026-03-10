@@ -64,9 +64,18 @@ function formatDayLabel(value: string) {
         month: "short",
         day: "numeric",
       }),
+      dayNumber: date.getDate(),
+      monthShort: date.toLocaleDateString(undefined, { month: "short" }),
+      weekdayShort: date.toLocaleDateString(undefined, { weekday: "short" }),
     }
   } catch {
-    return { short: value, long: value }
+    return {
+      short: value,
+      long: value,
+      dayNumber: value,
+      monthShort: "",
+      weekdayShort: "",
+    }
   }
 }
 
@@ -301,9 +310,7 @@ export function MySchedulePeriodView({
     }
 
     const reason = window.prompt("Add an optional reason for dropping this shift:", "")
-    if (reason === null) {
-      return
-    }
+    if (reason === null) return
 
     setWorkingAssignmentId(assignment.id)
 
@@ -352,7 +359,7 @@ export function MySchedulePeriodView({
     return (
       <div
         key={shift.id}
-        className="rounded-[26px] border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+        className="rounded-[26px] border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md"
         style={{
           borderLeftWidth: 4,
           borderLeftColor: shift.color || "#3B82F6",
@@ -360,7 +367,7 @@ export function MySchedulePeriodView({
       >
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{shift.label}</p>
+            <p className="text-base font-semibold text-slate-900">{shift.label}</p>
             <p className="mt-1 text-sm text-slate-600">{formatRange(shift.start_time, shift.end_time)}</p>
           </div>
 
@@ -410,9 +417,7 @@ export function MySchedulePeriodView({
                         type="button"
                         variant={dropRequest?.status === "pending" ? "secondary" : "outline"}
                         className={`mt-3 w-full ${
-                          mine
-                            ? "border-white/40 bg-white text-blue-700 hover:bg-slate-100"
-                            : ""
+                          mine ? "border-white/40 bg-white text-blue-700 hover:bg-slate-100" : ""
                         }`}
                         disabled={workingAssignmentId === assignment.id || dropRequest?.status === "pending"}
                         onClick={() => void handleDropShift(assignment)}
@@ -497,44 +502,43 @@ export function MySchedulePeriodView({
             })}
           </div>
 
-          <SectionCard className="hidden lg:block">
-            <div className="grid grid-cols-7 gap-4">
-              {weekDays.map((day) => {
-                const labels = formatDayLabel(day)
-                const dayShifts = shiftsByDate.get(day) || []
+          <SectionCard className="hidden lg:block overflow-hidden">
+            <div className="overflow-x-auto pb-2">
+              <div className="grid min-w-[1820px] grid-flow-col auto-cols-[240px] gap-5">
+                {weekDays.map((day) => {
+                  const labels = formatDayLabel(day)
+                  const dayShifts = shiftsByDate.get(day) || []
 
-                return (
-                  <div
-                    key={`desktop-${day}`}
-                    className="min-w-0 rounded-[28px] border border-slate-200 bg-slate-50/60 p-4"
-                  >
-                    <div className="mb-4 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-                        {labels.short}
-                      </p>
-                      <h3 className="mt-2 text-[28px] font-semibold leading-none text-slate-900">
-                        {new Date(`${day}T12:00:00`).getDate()}
-                      </h3>
-                      <p className="mt-2 text-sm font-medium text-slate-700">
-                        {new Date(`${day}T12:00:00`).toLocaleDateString(undefined, {
-                          month: "short",
-                          weekday: "short",
-                        })}
-                      </p>
-                    </div>
+                  return (
+                    <div
+                      key={`desktop-${day}`}
+                      className="rounded-[28px] border border-slate-200 bg-slate-50/70 p-4"
+                    >
+                      <div className="mb-4 rounded-[22px] border border-slate-200 bg-white px-4 py-4 shadow-sm">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+                          {labels.short}
+                        </p>
+                        <h3 className="mt-2 text-[44px] font-semibold leading-none text-slate-900">
+                          {labels.dayNumber}
+                        </h3>
+                        <p className="mt-2 text-sm font-medium text-slate-700">
+                          {labels.monthShort} {labels.weekdayShort}
+                        </p>
+                      </div>
 
-                    <div className="space-y-4">
-                      {dayShifts.length === 0 ? (
-                        <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
-                          No shifts
-                        </div>
-                      ) : (
-                        dayShifts.map((shift) => renderShiftCard(shift))
-                      )}
+                      <div className="space-y-4">
+                        {dayShifts.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-4 text-sm text-slate-500">
+                            No shifts
+                          </div>
+                        ) : (
+                          dayShifts.map((shift) => renderShiftCard(shift))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </SectionCard>
         </>

@@ -1,30 +1,51 @@
-"use client";
+"use client"
 
-import { Sidebar } from "@/components/layout/sidebar";
-import { TopBar } from "@/components/layout/top-bar";
-import { MobileNav } from "@/components/layout/mobile-nav";
-import { useOrg } from "@/lib/hooks/use-organization";
+import type { ReactNode } from "react"
+import { MobileNav } from "@/components/layout/mobile-nav"
+import { Sidebar } from "@/components/layout/sidebar"
+import { TopBar } from "@/components/layout/top-bar"
+import { OrgProvider } from "@/lib/hooks/use-organization"
+import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 
-export function AppShell({
+function AppShellInner({
   children,
-  userId,
+  userEmail,
 }: {
-  children: React.ReactNode;
-  userId: string;
+  children: ReactNode
+  userEmail: string
 }) {
-  const { organization, isManager } = useOrg();
+  const { organization } = useOrgSafe()
+  const fontFamily = organization?.font_family || "Inter"
 
   return (
-    <div className="min-h-screen">
-      <div className="mx-auto flex w-full max-w-[1700px] gap-4 px-3 py-3 sm:px-4 lg:px-6">
-        <Sidebar orgName={organization?.name} isManager={isManager} />
-
-        <div className="min-w-0 flex-1">
-          <TopBar orgName={organization?.name} />
-          <div className="pb-24 lg:pb-6">{children}</div>
+    <div
+      className="min-h-screen bg-slate-50 text-slate-900"
+      style={{ fontFamily }}
+    >
+      <div className="flex min-h-screen">
+        <Sidebar />
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+          <TopBar />
+          <main className="flex-1 pb-24 md:pb-8">{children}</main>
         </div>
       </div>
       <MobileNav />
     </div>
-  );
+  )
+}
+
+export function AppShell({
+  children,
+  userId,
+  userEmail,
+}: {
+  children: ReactNode
+  userId: string
+  userEmail: string
+}) {
+  return (
+    <OrgProvider userId={userId} userEmail={userEmail}>
+      <AppShellInner userEmail={userEmail}>{children}</AppShellInner>
+    </OrgProvider>
+  )
 }

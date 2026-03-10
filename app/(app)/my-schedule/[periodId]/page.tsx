@@ -1,6 +1,6 @@
 "use client"
 
-import { MySchedulePeriodView } from "@/components/schedule/my-schedule-period-view"
+import MySchedulePeriodView from "@/components/schedule/my-schedule-period-view"
 
 export default function MySchedulePeriodPage({
   params,

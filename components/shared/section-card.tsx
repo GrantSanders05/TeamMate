@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 export function SectionCard({
   title,
@@ -6,26 +6,25 @@ export function SectionCard({
   children,
   className = "",
 }: {
-  title?: string;
-  description?: string;
-  children: React.ReactNode;
-  className?: string;
+  title?: string
+  description?: string
+  children: React.ReactNode
+  className?: string
 }) {
   return (
-    <section className={`app-panel overflow-hidden ${className}`.trim()}>
-      {title || description ? (
-        <div className="border-b border-slate-100 px-6 py-5">
+    <section className={`section-card ${className}`.trim()}>
+      {(title || description) ? (
+        <div className="mb-4 space-y-1">
           {title ? (
-            <h2 className="text-lg font-semibold tracking-tight text-slate-950">
-              {title}
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
           ) : null}
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
+            <p className="text-sm text-slate-600">{description}</p>
           ) : null}
         </div>
       ) : null}
-      <div className="px-6 py-5">{children}</div>
+
+      {children}
     </section>
-  );
+  )
 }

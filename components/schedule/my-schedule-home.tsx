@@ -1,11 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
-import { OrgBrandHeader } from "@/components/organization/org-brand-header"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
 
@@ -17,20 +15,31 @@ type Period = {
   status: string
 }
 
-export function MyScheduleHome() {
-  const supabase = createClient()
-  const { organization } = useOrgSafe()
+function formatDateRange(start: string, end: string) {
+  try {
+    const startDate = new Date(start)
+    const endDate = new Date(end)
+    return `${startDate.toLocaleDateString()} – ${endDate.toLocaleDateString()}`
+  } catch {
+    return `${start} – ${end}`
+  }
+}
 
+export function MyScheduleHome() {
+  const supabase = useMemo(() => createClient(), [])
+  const { organization } = useOrgSafe()
   const [periods, setPeriods] = useState<Period[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function loadPeriods() {
-      if (!organization) {
+      if (!organization?.id) {
+        setPeriods([])
         setLoading(false)
         return
       }
 
+      setLoading(true)
       const { data } = await supabase
         .from("scheduling_periods")
         .select("id, name, start_date, end_date, status")
@@ -43,48 +52,44 @@ export function MyScheduleHome() {
     }
 
     void loadPeriods()
-  }, [organization?.id])
-
-  if (!organization) {
-    return <div className="rounded-lg border bg-white p-6">No organization selected.</div>
-  }
-
-  if (loading) {
-    return <div className="rounded-lg border bg-white p-6">Loading schedules...</div>
-  }
+  }, [organization?.id, supabase])
 
   return (
-    <PageShell>
-      <OrgBrandHeader
-        title={`${organization.name} Schedule`}
-        subtitle="Browse all published schedule periods for your organization."
-      />
-
-      <SectionCard title="My Schedule" description="Open a published period to see the full team schedule and your assigned shifts.">
-        {periods.length === 0 ? (
-          <div className="text-sm text-slate-600">No published schedules yet.</div>
-        ) : (
-          <div className="space-y-3">
-            {periods.map((period) => (
-              <div
-                key={period.id}
-                className="flex flex-col gap-3 rounded-2xl border border-slate-200 p-4 md:flex-row md:items-center md:justify-between"
-              >
-                <div>
-                  <div className="font-medium text-slate-900">{period.name}</div>
-                  <div className="mt-1 text-sm text-slate-600">
-                    {period.start_date} → {period.end_date}
-                  </div>
-                </div>
-
-                <Button asChild>
-                  <Link href={`/my-schedule/${period.id}`}>Open Schedule</Link>
-                </Button>
+    <PageShell
+      title="My Schedule"
+      subtitle="View your published schedules and open a specific period."
+    >
+      {!organization ? (
+        <SectionCard>
+          <p className="text-sm text-slate-600">No organization selected.</p>
+        </SectionCard>
+      ) : loading ? (
+        <SectionCard>
+          <p className="text-sm text-slate-600">Loading schedules...</p>
+        </SectionCard>
+      ) : periods.length === 0 ? (
+        <SectionCard>
+          <p className="text-sm text-slate-600">No published schedules yet.</p>
+        </SectionCard>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {periods.map((period) => (
+            <SectionCard key={period.id} title={period.name} description={formatDateRange(period.start_date, period.end_date)}>
+              <div className="flex items-center justify-between">
+                <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
+                  Published
+                </span>
+                <Link
+                  href={`/my-schedule/${period.id}`}
+                  className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-slate-800"
+                >
+                  Open Schedule
+                </Link>
               </div>
-            ))}
-          </div>
-        )}
-      </SectionCard>
+            </SectionCard>
+          ))}
+        </div>
+      )}
     </PageShell>
   )
 }

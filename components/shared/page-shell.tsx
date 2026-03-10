@@ -12,21 +12,18 @@ export function PageShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="min-h-full bg-gradient-to-b from-slate-50 via-white to-slate-100">
-      <div className="mx-auto max-w-7xl space-y-6 px-4 py-4 sm:px-6 lg:px-8">
-        {(title || subtitle || actions) ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white/90 p-5 shadow-sm backdrop-blur md:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                {title ? <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{title}</h1> : null}
-                {subtitle ? <p className="mt-2 max-w-2xl text-sm text-slate-600">{subtitle}</p> : null}
-              </div>
-              {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
-            </div>
+    <div className="space-y-6">
+      {(title || subtitle || actions) ? (
+        <div className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm md:flex-row md:items-end md:justify-between">
+          <div>
+            {title ? <h1 className="text-2xl font-semibold text-slate-900">{title}</h1> : null}
+            {subtitle ? <p className="mt-1 text-sm text-slate-600">{subtitle}</p> : null}
           </div>
-        ) : null}
-        {children}
-      </div>
+          {actions ? <div className="shrink-0">{actions}</div> : null}
+        </div>
+      ) : null}
+
+      {children}
     </div>
   )
 }

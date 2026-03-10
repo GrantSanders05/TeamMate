@@ -12,7 +12,7 @@ export function SectionCard({
   className?: string
 }) {
   return (
-    <section className={`rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm md:p-6 ${className}`}>
+    <section className={["rounded-2xl border border-slate-200 bg-white p-5 shadow-sm", className].join(" ")}>
       {(title || description) ? (
         <div className="mb-4">
           {title ? <h2 className="text-lg font-semibold text-slate-900">{title}</h2> : null}

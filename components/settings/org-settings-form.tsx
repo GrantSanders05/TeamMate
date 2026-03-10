@@ -13,8 +13,8 @@ import { SectionCard } from "@/components/shared/section-card"
 import { OrganizationThemePresets } from "@/components/settings/organization-theme-presets"
 import { generateJoinCode } from "@/lib/utils"
 
-function normalizeJoinCode(code: string) {
-  return code.trim().toUpperCase()
+function normalizeJoinCode(code: string | null | undefined) {
+  return (code ?? "").trim().toUpperCase()
 }
 
 export function OrgSettingsForm() {
@@ -26,9 +26,14 @@ export function OrgSettingsForm() {
   const [primaryColor, setPrimaryColor] = useState("#2563EB")
   const [secondaryColor, setSecondaryColor] = useState("#1E40AF")
   const [fontFamily, setFontFamily] = useState("Inter")
-  const [joinCode, setJoinCode] = useState("")
   const [saving, setSaving] = useState(false)
   const [regeneratingCode, setRegeneratingCode] = useState(false)
+
+  const joinCode = normalizeJoinCode(organization?.join_code)
+  const joinLink = useMemo(() => {
+    if (!joinCode || typeof window === "undefined") return ""
+    return `${window.location.origin}/join/${joinCode}`
+  }, [joinCode])
 
   useEffect(() => {
     if (!organization) {
@@ -37,7 +42,6 @@ export function OrgSettingsForm() {
       setPrimaryColor("#2563EB")
       setSecondaryColor("#1E40AF")
       setFontFamily("Inter")
-      setJoinCode("")
       return
     }
 
@@ -46,7 +50,6 @@ export function OrgSettingsForm() {
     setPrimaryColor(organization.primary_color || "#2563EB")
     setSecondaryColor(organization.secondary_color || "#1E40AF")
     setFontFamily(organization.font_family || "Inter")
-    setJoinCode(normalizeJoinCode(organization.join_code || ""))
   }, [
     organization?.id,
     organization?.name,
@@ -54,13 +57,7 @@ export function OrgSettingsForm() {
     organization?.primary_color,
     organization?.secondary_color,
     organization?.font_family,
-    organization?.join_code,
   ])
-
-  const joinLink = useMemo(() => {
-    if (!joinCode || typeof window === "undefined") return ""
-    return `${window.location.origin}/join/${joinCode}`
-  }, [joinCode])
 
   async function generateUniqueJoinCode(currentOrgId: string) {
     let candidate = normalizeJoinCode(generateJoinCode())
@@ -129,7 +126,6 @@ export function OrgSettingsForm() {
       }
 
       await refresh()
-      setJoinCode(newCode)
       alert("Join code regenerated.")
     } catch (error) {
       alert(error instanceof Error ? error.message : "Could not regenerate join code.")
@@ -238,7 +234,7 @@ export function OrgSettingsForm() {
                 </Button>
                 <Button onClick={() => void regenerateJoinCode()} disabled={regeneratingCode}>
                   <RefreshCcw className="mr-2 h-4 w-4" />
-                  {regeneratingCode ? "Regenerating..." : "Regenerate Join Code"}
+                  {regeneratingCode ? "Regenerating..." : joinCode ? "Regenerate Join Code" : "Generate Join Code"}
                 </Button>
               </div>
             </div>

@@ -8,13 +8,17 @@ import { useOrg } from "@/lib/hooks/use-organization"
 import { useToast } from "@/components/ui/use-toast"
 import { generateJoinCode } from "@/lib/utils"
 
+function normalizeJoinCode(code: string | null | undefined) {
+  return (code ?? "").trim().toUpperCase()
+}
+
 export function JoinCodeDisplay() {
   const supabase = createClient()
   const { organization, isManager, refresh } = useOrg()
   const { toast } = useToast()
   const [isRegenerating, setIsRegenerating] = useState(false)
 
-  const joinCode = organization?.join_code?.trim().toUpperCase() || ""
+  const joinCode = normalizeJoinCode(organization?.join_code)
 
   const joinLink = useMemo(() => {
     if (!joinCode || typeof window === "undefined") return ""
@@ -40,7 +44,7 @@ export function JoinCodeDisplay() {
   }
 
   async function generateUniqueJoinCode(currentOrgId: string) {
-    let nextCode = generateJoinCode().toUpperCase()
+    let nextCode = normalizeJoinCode(generateJoinCode())
 
     while (true) {
       const { data } = await supabase
@@ -51,7 +55,7 @@ export function JoinCodeDisplay() {
 
       if (!data || data.id === currentOrgId) return nextCode
 
-      nextCode = generateJoinCode().toUpperCase()
+      nextCode = normalizeJoinCode(generateJoinCode())
     }
   }
 
@@ -82,8 +86,8 @@ export function JoinCodeDisplay() {
       await refresh()
 
       toast({
-        title: "Join code regenerated",
-        description: "Your organization now has a new join code and link.",
+        title: joinCode ? "Join code regenerated" : "Join code created",
+        description: "Your organization now has a saved join code and share link.",
       })
     } catch (error) {
       toast({
@@ -129,7 +133,7 @@ export function JoinCodeDisplay() {
             {isManager ? (
               <Button onClick={() => void regenerateJoinCode()} disabled={isRegenerating}>
                 <RefreshCcw className="mr-2 h-4 w-4" />
-                {isRegenerating ? "Regenerating..." : "Regenerate"}
+                {isRegenerating ? "Saving..." : joinCode ? "Regenerate" : "Generate"}
               </Button>
             ) : null}
           </div>

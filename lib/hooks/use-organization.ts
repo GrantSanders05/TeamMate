@@ -21,8 +21,10 @@ import type {
 
 const OrgContext = createContext<OrgContextValue | undefined>(undefined)
 
-type MembershipQueryRow = OrganizationMember & {
-  organizations: Organization | null
+type MembershipRow = OrganizationMember
+
+function normalizeJoinCode(code: string | null | undefined) {
+  return (code ?? "").trim().toUpperCase()
 }
 
 export function OrgProvider({
@@ -38,19 +40,94 @@ export function OrgProvider({
   const [memberships, setMemberships] = useState<OrganizationMembership[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
+  const hydrateMemberships = useCallback(
+    async (memberRows: MembershipRow[]) => {
+      if (memberRows.length === 0) {
+        setMemberships([])
+        return []
+      }
+
+      const organizationIds = Array.from(
+        new Set(memberRows.map((row) => row.organization_id).filter(Boolean))
+      )
+
+      const { data: orgRows, error: orgError } = await supabase
+        .from("organizations")
+        .select("*")
+        .in("id", organizationIds)
+
+      if (orgError) {
+        throw orgError
+      }
+
+      const orgMap = new Map<string, Organization>()
+      for (const org of (orgRows ?? []) as Organization[]) {
+        orgMap.set(org.id, {
+          ...org,
+          join_code: normalizeJoinCode(org.join_code),
+        })
+      }
+
+      const mapped: OrganizationMembership[] = memberRows
+        .map((row) => {
+          const org = orgMap.get(row.organization_id)
+          if (!org) return null
+
+          return {
+            org,
+            member: row,
+          }
+        })
+        .filter(Boolean) as OrganizationMembership[]
+
+      setMemberships(mapped)
+      return mapped
+    },
+    [supabase]
+  )
+
+  const loadSelectedOrganization = useCallback(
+    async (organizationId: string) => {
+      const { data, error } = await supabase
+        .from("organizations")
+        .select("*")
+        .eq("id", organizationId)
+        .single()
+
+      if (error) {
+        throw error
+      }
+
+      const nextOrg = {
+        ...(data as Organization),
+        join_code: normalizeJoinCode((data as Organization).join_code),
+      }
+
+      setOrganization(nextOrg)
+      return nextOrg
+    },
+    [supabase]
+  )
+
   const setActiveOrg = useCallback(
-    (organizationId: string) => {
+    async (organizationId: string) => {
       const next = memberships.find((item) => item.org.id === organizationId)
       if (!next) return
 
-      setOrganization(next.org)
       setMember(next.member)
+      setOrganization(next.org)
 
       if (typeof window !== "undefined") {
         localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, organizationId)
       }
+
+      try {
+        await loadSelectedOrganization(organizationId)
+      } catch (error) {
+        console.error("Failed to hydrate selected organization", error)
+      }
     },
-    [memberships]
+    [memberships, loadSelectedOrganization]
   )
 
   const refresh = useCallback(async () => {
@@ -58,7 +135,7 @@ export function OrgProvider({
 
     const { data, error } = await supabase
       .from("organization_members")
-      .select("*, organizations(*)")
+      .select("id, organization_id, user_id, role, display_name, is_active, joined_at")
       .eq("user_id", userId)
       .eq("is_active", true)
       .order("joined_at", { ascending: true })
@@ -72,46 +149,53 @@ export function OrgProvider({
       return
     }
 
-    const mapped: OrganizationMembership[] = ((data ?? []) as MembershipQueryRow[])
-      .filter((row) => Boolean(row.organizations))
-      .map((row) => ({
-        org: row.organizations as Organization,
-        member: {
-          id: row.id,
-          organization_id: row.organization_id,
-          user_id: row.user_id,
-          role: row.role,
-          display_name: row.display_name,
-          is_active: row.is_active,
-          joined_at: row.joined_at,
-        },
-      }))
+    const memberRows = ((data ?? []) as MembershipRow[]).filter(Boolean)
 
-    setMemberships(mapped)
-
-    if (mapped.length === 0) {
+    if (memberRows.length === 0) {
+      setMemberships([])
       setOrganization(null)
       setMember(null)
       setIsLoading(false)
       return
     }
 
-    const savedOrgId =
-      typeof window !== "undefined"
-        ? localStorage.getItem(ACTIVE_ORG_STORAGE_KEY)
-        : null
+    try {
+      const mapped = await hydrateMemberships(memberRows)
 
-    const selected = mapped.find((item) => item.org.id === savedOrgId) ?? mapped[0]
+      if (mapped.length === 0) {
+        setOrganization(null)
+        setMember(null)
+        setIsLoading(false)
+        return
+      }
 
-    setOrganization(selected.org)
-    setMember(selected.member)
+      const savedOrgId =
+        typeof window !== "undefined"
+          ? localStorage.getItem(ACTIVE_ORG_STORAGE_KEY)
+          : null
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, selected.org.id)
+      const currentOrgId = organization?.id ?? null
+      const selectedMembership =
+        mapped.find((item) => item.org.id === savedOrgId) ??
+        mapped.find((item) => item.org.id === currentOrgId) ??
+        mapped[0]
+
+      setMember(selectedMembership.member)
+      setOrganization(selectedMembership.org)
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem(ACTIVE_ORG_STORAGE_KEY, selectedMembership.org.id)
+      }
+
+      await loadSelectedOrganization(selectedMembership.org.id)
+    } catch (loadError) {
+      console.error("Failed to load active organization", loadError)
+      setOrganization(null)
+      setMember(null)
+    } finally {
+      setIsLoading(false)
     }
-
-    setIsLoading(false)
-  }, [supabase, userId])
+  }, [supabase, userId, organization?.id, hydrateMemberships, loadSelectedOrganization])
 
   useEffect(() => {
     void refresh()

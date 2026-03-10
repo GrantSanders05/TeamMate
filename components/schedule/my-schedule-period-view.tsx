@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { CalendarDays, Clock3 } from "lucide-react"
+
 import { createClient } from "@/lib/supabase/client"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
@@ -95,6 +97,10 @@ function getShiftHours(start: string, end: string) {
   }
 
   return (endTotal - startTotal) / 60
+}
+
+function getShiftStartDate(shift: Shift) {
+  return new Date(`${shift.date}T${shift.start_time}`)
 }
 
 export function MySchedulePeriodView({
@@ -282,6 +288,17 @@ export function MySchedulePeriodView({
     [myAssignments, shifts]
   )
 
+  const myUpcomingShift = useMemo(() => {
+    const nextShift = myAssignments
+      .map((assignment) => shifts.find((shift) => shift.id === assignment.shift_id))
+      .filter(Boolean)
+      .filter((shift): shift is Shift => Boolean(shift))
+      .filter((shift) => getShiftStartDate(shift).getTime() >= Date.now())
+      .sort((a, b) => getShiftStartDate(a).getTime() - getShiftStartDate(b).getTime())[0]
+
+    return nextShift || null
+  }, [myAssignments, shifts])
+
   const getDisplayName = (assignment: Assignment) => {
     const member = members.find((item) => item.user_id === assignment.employee_id)
     return member?.display_name || assignment.manual_name || "Assigned"
@@ -374,7 +391,7 @@ export function MySchedulePeriodView({
 
             <div className="mt-3 space-y-2">
               {shiftAssignments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">
                   No one assigned yet
                 </div>
               ) : (
@@ -394,7 +411,7 @@ export function MySchedulePeriodView({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <span className="truncate font-medium block">{getDisplayName(assignment)}</span>
+                          <span className="block truncate font-medium">{getDisplayName(assignment)}</span>
                         </div>
                         {mine ? (
                           <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
@@ -404,8 +421,8 @@ export function MySchedulePeriodView({
                       </div>
 
                       {canDrop ? (
-                        <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-white/10 px-3 py-2">
-                          <div className="text-xs font-medium text-white/85">
+                        <div className="mt-3 rounded-2xl bg-white/10 p-3">
+                          <div className="mb-2 text-xs font-medium text-white/85">
                             {dropRequest?.status === "pending"
                               ? "Drop request pending"
                               : "Need to drop this shift?"}
@@ -413,7 +430,7 @@ export function MySchedulePeriodView({
                           <Button
                             size="sm"
                             variant={dropRequest?.status === "pending" ? "secondary" : "outline"}
-                            className={`rounded-xl border-0 ${
+                            className={`min-h-[44px] w-full rounded-xl border-0 ${
                               dropRequest?.status === "pending"
                                 ? "bg-white text-slate-900 hover:bg-white"
                                 : "bg-white text-slate-900 hover:bg-slate-100"
@@ -442,7 +459,38 @@ export function MySchedulePeriodView({
 
   return (
     <PageShell title={period?.name || "My Schedule"} subtitle="Published team schedule">
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <SectionCard className="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-700 text-white md:col-span-2 xl:col-span-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100/80">Next Shift</p>
+          {myUpcomingShift ? (
+            <div className="mt-4 space-y-3">
+              <h2 className="text-2xl font-semibold tracking-tight">{myUpcomingShift.label}</h2>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <div className="flex items-center gap-2 text-blue-100/80">
+                    <CalendarDays className="h-4 w-4" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Day</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-white">{formatDayLabel(myUpcomingShift.date).long}</p>
+                </div>
+                <div className="rounded-2xl bg-white/10 p-3">
+                  <div className="flex items-center gap-2 text-blue-100/80">
+                    <Clock3 className="h-4 w-4" />
+                    <span className="text-[11px] font-semibold uppercase tracking-[0.16em]">Time</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {formatRange(myUpcomingShift.start_time, myUpcomingShift.end_time)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-blue-50/90">
+              You do not have an upcoming assigned shift in this period.
+            </p>
+          )}
+        </SectionCard>
+
         <SectionCard className="bg-gradient-to-br from-blue-50 via-white to-white">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Shift Amount</p>
           <div className="mt-3 flex items-end justify-between gap-3">

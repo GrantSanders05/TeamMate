@@ -32,6 +32,7 @@ type PeriodRecord = {
   name: string
   start_date: string
   end_date: string
+  organization_id: string
 }
 
 function formatRange(start: string, end: string) {
@@ -51,7 +52,11 @@ function formatDayLabel(value: string) {
     const date = new Date(`${value}T12:00:00`)
     return {
       short: date.toLocaleDateString(undefined, { weekday: "short" }).toUpperCase(),
-      long: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+      long: date.toLocaleDateString(undefined, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+      }),
     }
   } catch {
     return { short: value, long: value }
@@ -71,7 +76,7 @@ function getDaysInRange(startDate: string, endDate: string) {
   return days
 }
 
-export default function MySchedulePeriodView({
+export function MySchedulePeriodView({
   periodId,
 }: {
   periodId: string
@@ -165,6 +170,7 @@ export default function MySchedulePeriodView({
     }
 
     void loadData()
+
     return () => {
       mounted = false
     }
@@ -214,12 +220,14 @@ export default function MySchedulePeriodView({
       subtitle="Published team schedule"
     >
       <SectionCard>
-        {!period && !loading && error ? (
+        {error ? (
           <p className="text-sm text-red-600">{error}</p>
         ) : loading ? (
           <p className="text-sm text-slate-500">Loading schedule...</p>
         ) : weekDays.length === 0 ? (
-          <p className="text-sm text-slate-500">No shifts were found for this published period.</p>
+          <p className="text-sm text-slate-500">
+            No shifts were found for this published period.
+          </p>
         ) : (
           <>
             <div className="hidden gap-4 xl:grid xl:grid-cols-7">
@@ -233,10 +241,12 @@ export default function MySchedulePeriodView({
                     className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
                   >
                     <div className="mb-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                         {labels.short}
                       </p>
-                      <h3 className="text-lg font-semibold text-slate-900">{labels.long}</h3>
+                      <h3 className="text-base font-semibold text-slate-900">
+                        {labels.long}
+                      </h3>
                     </div>
 
                     <div className="space-y-3">
@@ -251,7 +261,7 @@ export default function MySchedulePeriodView({
                           return (
                             <div
                               key={shift.id}
-                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 shadow-sm"
+                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm"
                             >
                               <div className="flex">
                                 <div
@@ -266,11 +276,11 @@ export default function MySchedulePeriodView({
                                     {formatRange(shift.start_time, shift.end_time)}
                                   </p>
 
-                                  <div className="mt-3 flex flex-wrap gap-2">
+                                  <div className="mt-3 space-y-2">
                                     {shiftAssignments.length === 0 ? (
-                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">
+                                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                                         No one assigned yet
-                                      </span>
+                                      </div>
                                     ) : (
                                       shiftAssignments.map((assignment) => {
                                         const mine = Boolean(
@@ -278,16 +288,23 @@ export default function MySchedulePeriodView({
                                         )
 
                                         return (
-                                          <span
+                                          <div
                                             key={assignment.id}
-                                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                                            className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-2 text-sm ${
                                               mine
                                                 ? "bg-blue-600 text-white"
-                                                : "border border-slate-200 bg-white text-slate-700"
+                                                : "border border-slate-200 bg-slate-50 text-slate-700"
                                             }`}
                                           >
-                                            {getDisplayName(assignment)}
-                                          </span>
+                                            <span className="truncate font-medium">
+                                              {getDisplayName(assignment)}
+                                            </span>
+                                            {mine ? (
+                                              <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                                                You
+                                              </span>
+                                            ) : null}
+                                          </div>
                                         )
                                       })
                                     )}
@@ -310,12 +327,17 @@ export default function MySchedulePeriodView({
                 const dayShifts = shiftsByDate.get(day) || []
 
                 return (
-                  <div key={day} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+                  <div
+                    key={day}
+                    className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm"
+                  >
                     <div className="mb-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                         {labels.short}
                       </p>
-                      <h3 className="text-lg font-semibold text-slate-900">{labels.long}</h3>
+                      <h3 className="text-base font-semibold text-slate-900">
+                        {labels.long}
+                      </h3>
                     </div>
 
                     <div className="space-y-3">
@@ -330,7 +352,7 @@ export default function MySchedulePeriodView({
                           return (
                             <div
                               key={shift.id}
-                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-slate-50 shadow-sm"
+                              className="overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm"
                             >
                               <div className="flex">
                                 <div
@@ -338,22 +360,18 @@ export default function MySchedulePeriodView({
                                   style={{ backgroundColor: shift.color || "#2563EB" }}
                                 />
                                 <div className="min-w-0 flex-1 p-4">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                      <p className="truncate text-sm font-semibold text-slate-900">
-                                        {shift.label}
-                                      </p>
-                                      <p className="mt-1 text-xs font-medium text-slate-500">
-                                        {formatRange(shift.start_time, shift.end_time)}
-                                      </p>
-                                    </div>
-                                  </div>
+                                  <p className="truncate text-sm font-semibold text-slate-900">
+                                    {shift.label}
+                                  </p>
+                                  <p className="mt-1 text-xs font-medium text-slate-500">
+                                    {formatRange(shift.start_time, shift.end_time)}
+                                  </p>
 
-                                  <div className="mt-3 flex flex-wrap gap-2">
+                                  <div className="mt-3 space-y-2">
                                     {shiftAssignments.length === 0 ? (
-                                      <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-500">
+                                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                                         No one assigned yet
-                                      </span>
+                                      </div>
                                     ) : (
                                       shiftAssignments.map((assignment) => {
                                         const mine = Boolean(
@@ -361,16 +379,23 @@ export default function MySchedulePeriodView({
                                         )
 
                                         return (
-                                          <span
+                                          <div
                                             key={assignment.id}
-                                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                                            className={`flex items-center justify-between gap-3 rounded-2xl px-3 py-2 text-sm ${
                                               mine
                                                 ? "bg-blue-600 text-white"
-                                                : "border border-slate-200 bg-white text-slate-700"
+                                                : "border border-slate-200 bg-slate-50 text-slate-700"
                                             }`}
                                           >
-                                            {getDisplayName(assignment)}
-                                          </span>
+                                            <span className="truncate font-medium">
+                                              {getDisplayName(assignment)}
+                                            </span>
+                                            {mine ? (
+                                              <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em]">
+                                                You
+                                              </span>
+                                            ) : null}
+                                          </div>
                                         )
                                       })
                                     )}
@@ -392,3 +417,5 @@ export default function MySchedulePeriodView({
     </PageShell>
   )
 }
+
+export default MySchedulePeriodView

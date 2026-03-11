@@ -2,16 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, CalendarDays, CircleDot, FolderClock, Settings2 } from "lucide-react"
-
+import { Archive, CalendarClock, ClipboardList, Settings, Users2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { OrgBrandHeader } from "@/components/organization/org-brand-header"
+import { createClient } from "@/lib/supabase/client"
+import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
-import { StatsCards } from "@/components/dashboard/stats-cards"
-import { useOrgSafe } from "@/lib/hooks/use-org-safe"
-import { createClient } from "@/lib/supabase/client"
-import { formatDate } from "@/lib/utils"
 
 type Period = {
   id: string
@@ -21,11 +17,62 @@ type Period = {
   status: string
 }
 
-const statusTone: Record<string, string> = {
-  draft: "bg-slate-100 text-slate-700",
-  collecting: "bg-amber-100 text-amber-800",
-  scheduling: "bg-sky-100 text-sky-800",
-  published: "bg-emerald-100 text-emerald-800",
+function formatDate(value: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })
+}
+
+function statusMeta(status: string) {
+  switch (status) {
+    case "collecting":
+      return {
+        label: "Collecting",
+        pill: "border-amber-200 bg-amber-50 text-amber-800",
+      }
+    case "scheduling":
+      return {
+        label: "Scheduling",
+        pill: "border-blue-200 bg-blue-50 text-blue-800",
+      }
+    case "published":
+      return {
+        label: "Published",
+        pill: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      }
+    case "archived":
+      return {
+        label: "Archived",
+        pill: "border-slate-200 bg-slate-50 text-slate-700",
+      }
+    default:
+      return {
+        label: "Draft",
+        pill: "border-violet-200 bg-violet-50 text-violet-800",
+      }
+  }
+}
+
+function DashboardStat({
+  label,
+  value,
+  helper,
+}: {
+  label: string
+  value: number | string
+  helper: string
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
+      <p className="mt-1 text-sm text-slate-500">{helper}</p>
+    </div>
+  )
 }
 
 export function ManagerDashboard() {
@@ -33,236 +80,265 @@ export function ManagerDashboard() {
   const { organization } = useOrgSafe()
   const [periods, setPeriods] = useState<Period[]>([])
   const [pendingDrops, setPendingDrops] = useState(0)
+  const [employeeCount, setEmployeeCount] = useState(0)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let mounted = true
+
     async function loadDashboard() {
       if (!organization) {
         setLoading(false)
         return
       }
 
-      const { data: periodData } = await supabase
-        .from("scheduling_periods")
-        .select("id, name, start_date, end_date, status")
-        .eq("organization_id", organization.id)
-        .order("start_date", { ascending: false })
+      const [{ data: periodData }, { data: dropData }, { data: memberData }] =
+        await Promise.all([
+          supabase
+            .from("scheduling_periods")
+            .select("id, name, start_date, end_date, status")
+            .eq("organization_id", organization.id)
+            .order("start_date", { ascending: false }),
+          supabase.from("drop_requests").select("id").eq("status", "pending"),
+          supabase
+            .from("organization_members")
+            .select("id")
+            .eq("organization_id", organization.id)
+            .eq("role", "employee")
+            .eq("is_active", true),
+        ])
 
-      const { data: dropData } = await supabase
-        .from("drop_requests")
-        .select("id, status")
-        .eq("status", "pending")
+      if (!mounted) return
 
       setPeriods((periodData as Period[]) || [])
       setPendingDrops((dropData || []).length)
+      setEmployeeCount((memberData || []).length)
       setLoading(false)
     }
 
     void loadDashboard()
+
+    return () => {
+      mounted = false
+    }
   }, [organization?.id, supabase])
 
   const activePeriods = useMemo(
-    () => periods.filter((period) => ["draft", "collecting", "scheduling", "published"].includes(period.status)),
-    [periods]
+    () => periods.filter((p) => ["draft", "collecting", "scheduling", "published"].includes(p.status)),
+    [periods],
   )
+  const archivedPeriods = useMemo(
+    () => periods.filter((p) => p.status === "archived"),
+    [periods],
+  )
+  const publishedPeriods = useMemo(
+    () => periods.filter((p) => p.status === "published"),
+    [periods],
+  )
+  const collectingPeriods = useMemo(
+    () => periods.filter((p) => p.status === "collecting"),
+    [periods],
+  )
+  const latestPeriod = activePeriods[0] || periods[0] || null
 
   if (!organization) {
-    return (
-      <PageShell title="Dashboard" subtitle="No organization selected yet.">
-        <SectionCard title="Organization Required" description="Choose or create an organization to start using TeamMate.">
-          <p className="text-sm text-slate-600">Once an organization is active, your manager tools and branding will appear here.</p>
-        </SectionCard>
-      </PageShell>
-    )
+    return <div className="text-sm text-slate-500">No organization selected.</div>
   }
 
   if (loading) {
-    return (
-      <PageShell title="Manager Dashboard" subtitle="Loading your latest scheduling data...">
-        <div className="grid gap-4 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-36 rounded-[28px] border border-slate-200 bg-white animate-pulse" />
-          ))}
-        </div>
-      </PageShell>
-    )
+    return <div className="text-sm text-slate-500">Loading dashboard...</div>
   }
 
   return (
     <PageShell
       title="Manager Dashboard"
-      subtitle="Stay on top of active periods, drop requests, and the next actions your team needs from you."
+      subtitle={organization.name}
       actions={
-        <>
-          <Button asChild variant="outline">
-            <Link href="/settings">
-              <Settings2 className="h-4 w-4" />
-              Settings
-            </Link>
-          </Button>
+        <div className="flex flex-wrap items-center gap-3">
           <Button asChild>
-            <Link href="/schedule">
-              Open Schedules
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+            <Link href="/schedule">Open Schedule</Link>
           </Button>
-        </>
+          <Button asChild variant="outline">
+            <Link href="/employees">Manage Employees</Link>
+          </Button>
+        </div>
       }
     >
-      <OrgBrandHeader
-        compact
-        subtitle="Your workspace now carries a cleaner, more branded manager view."
-        title={organization.name}
-      />
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <DashboardStat
+            label="Active Periods"
+            value={activePeriods.length}
+            helper="Current schedule periods still in progress."
+          />
+          <DashboardStat
+            label="Pending Drops"
+            value={pendingDrops}
+            helper="Requests waiting on manager review."
+          />
+          <DashboardStat
+            label="Team Size"
+            value={employeeCount}
+            helper="Active employees in this organization."
+          />
+          <DashboardStat
+            label="Archived"
+            value={archivedPeriods.length}
+            helper="Finished periods saved in history."
+          />
+        </div>
 
-      <StatsCards
-        items={[
-          {
-            label: "Active Periods",
-            value: activePeriods.length,
-            helper: "Draft, collecting, scheduling, and published periods that still need attention.",
-          },
-          {
-            label: "Pending Drop Requests",
-            value: pendingDrops,
-            helper: "Shift drop requests waiting for manager review.",
-          },
-          {
-            label: "All Schedule Periods",
-            value: periods.length,
-            helper: "Every scheduling period currently tracked for this organization.",
-          },
-        ]}
-      />
-
-      <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-        <SectionCard
-          description="Your most recent schedule periods, with a cleaner hierarchy and more scannable status styling."
-          title="Recent Schedule Periods"
-        >
-          {periods.length === 0 ? (
-            <div className="rounded-[24px] border border-dashed border-slate-300 bg-slate-50 p-6 text-sm text-slate-600">
-              No schedule periods yet. Create your first one to begin collecting availability and building a schedule.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {periods.slice(0, 5).map((period) => (
-                <div
-                  key={period.id}
-                  className="flex flex-col gap-4 rounded-[24px] border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-slate-500">
-                        Period
-                      </span>
-                      <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] ${statusTone[period.status] || "bg-slate-100 text-slate-700"}`}>
-                        {period.status}
-                      </span>
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <SectionCard title="Recent Periods" className="shadow-sm">
+            {periods.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+                No schedule periods yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {periods.slice(0, 6).map((period) => {
+                  const meta = statusMeta(period.status)
+                  return (
+                    <div
+                      key={period.id}
+                      className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-base font-semibold text-slate-900">
+                            {period.name}
+                          </h3>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${meta.pill}`}
+                          >
+                            {meta.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {formatDate(period.start_date)} – {formatDate(period.end_date)}
+                        </p>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <Link href="/schedule">Open</Link>
+                      </Button>
                     </div>
-                    <h3 className="truncate text-lg font-semibold text-slate-950">{period.name}</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {formatDate(period.start_date)} – {formatDate(period.end_date)}
+                  )
+                })}
+              </div>
+            )}
+          </SectionCard>
+
+          <div className="space-y-6">
+            <SectionCard title="Quick Actions" className="shadow-sm">
+              <div className="grid gap-3">
+                <Link
+                  href="/schedule"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <CalendarClock className="h-5 w-5 text-slate-500" />
+                    <div>
+                      <p className="font-medium text-slate-900">Schedules</p>
+                      <p className="text-sm text-slate-500">Build periods, shifts, and assignments</p>
+                    </div>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/history"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Archive className="h-5 w-5 text-slate-500" />
+                    <div>
+                      <p className="font-medium text-slate-900">History</p>
+                      <p className="text-sm text-slate-500">Review archived schedules</p>
+                    </div>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/settings"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Settings className="h-5 w-5 text-slate-500" />
+                    <div>
+                      <p className="font-medium text-slate-900">Settings</p>
+                      <p className="text-sm text-slate-500">Manage branding and org tools</p>
+                    </div>
+                  </div>
+                </Link>
+
+                <Link
+                  href="/employees"
+                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  <div className="flex items-center gap-3">
+                    <Users2 className="h-5 w-5 text-slate-500" />
+                    <div>
+                      <p className="font-medium text-slate-900">Employees</p>
+                      <p className="text-sm text-slate-500">View and manage your team</p>
+                    </div>
+                  </div>
+                </Link>
+              </div>
+            </SectionCard>
+
+            <SectionCard title="At a Glance" className="shadow-sm">
+              <div className="space-y-4 text-sm">
+                <div className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 p-4">
+                  <div>
+                    <p className="font-medium text-slate-900">Current Period</p>
+                    <p className="mt-1 text-slate-500">
+                      {latestPeriod
+                        ? `${latestPeriod.name} · ${formatDate(latestPeriod.start_date)} – ${formatDate(latestPeriod.end_date)}`
+                        : "Create your first period to get started."}
                     </p>
                   </div>
-
-                  <Button asChild variant="outline">
-                    <Link href="/schedule">
-                      Open
-                      <ArrowRight className="h-4 w-4" />
-                    </Link>
-                  </Button>
+                  {latestPeriod ? (
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusMeta(latestPeriod.status).pill}`}>
+                      {statusMeta(latestPeriod.status).label}
+                    </span>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
 
-        <div className="space-y-6">
-          <SectionCard
-            description="Quick links for the actions managers use the most."
-            title="Quick Actions"
-          >
-            <div className="grid gap-3">
-              <Link
-                className="group rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                href="/schedule"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-                    <CalendarDays className="h-5 w-5" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="font-medium text-slate-900">Availability</p>
+                    <p className="mt-1 text-slate-500">
+                      {collectingPeriods.length === 0
+                        ? "No periods are collecting availability right now."
+                        : `${collectingPeriods.length} period${collectingPeriods.length === 1 ? "" : "s"} still collecting availability.`}
+                    </p>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-950">Open Schedules</p>
-                    <p className="text-sm text-slate-600">Manage availability, staffing, and published periods.</p>
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="font-medium text-slate-900">Published</p>
+                    <p className="mt-1 text-slate-500">
+                      {publishedPeriods.length === 0
+                        ? "No periods are published right now."
+                        : `${publishedPeriods.length} published period${publishedPeriods.length === 1 ? "" : "s"} are live for employees.`}
+                    </p>
                   </div>
-                </div>
-              </Link>
-
-              <Link
-                className="group rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                href="/history"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-                    <FolderClock className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-950">Review History</p>
-                    <p className="text-sm text-slate-600">Look back at archived schedules and completed periods.</p>
+                  <div className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="h-4 w-4 text-slate-500" />
+                      <p className="font-medium text-slate-900">Drop Requests</p>
+                    </div>
+                    <p className="mt-1 text-slate-500">
+                      {pendingDrops === 0
+                        ? "No employee drop requests are waiting right now."
+                        : `${pendingDrops} request${pendingDrops === 1 ? "" : "s"} need manager review.`}
+                    </p>
                   </div>
                 </div>
-              </Link>
-
-              <Link
-                className="group rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                href="/settings"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
-                    <Settings2 className="h-5 w-5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-slate-950">Update Branding</p>
-                    <p className="text-sm text-slate-600">Tune colors, logo, and workspace identity in settings.</p>
-                  </div>
-                </div>
-              </Link>
-            </div>
-          </SectionCard>
-
-          <SectionCard
-            description="A cleaner summary card for what still needs review."
-            title="Manager Snapshot"
-          >
-            <div className="grid gap-3">
-              <div className="flex items-center justify-between rounded-[22px] bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <CircleDot className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm font-medium text-slate-700">Active periods</span>
-                </div>
-                <span className="text-sm font-semibold text-slate-950">{activePeriods.length}</span>
               </div>
-
-              <div className="flex items-center justify-between rounded-[22px] bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <CircleDot className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm font-medium text-slate-700">Pending drops</span>
-                </div>
-                <span className="text-sm font-semibold text-slate-950">{pendingDrops}</span>
-              </div>
-
-              <div className="flex items-center justify-between rounded-[22px] bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <CircleDot className="h-4 w-4 text-slate-500" />
-                  <span className="text-sm font-medium text-slate-700">Periods on record</span>
-                </div>
-                <span className="text-sm font-semibold text-slate-950">{periods.length}</span>
-              </div>
-            </div>
-          </SectionCard>
+            </SectionCard>
+          </div>
         </div>
       </div>
     </PageShell>
   )
 }
+
+export default ManagerDashboard

@@ -269,10 +269,15 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     [period]
   )
 
+  const balanceSnapshotMembers = useMemo(
+    () => members.filter((person) => person.role === "employee"),
+    [members]
+  )
+
   const employeeLoads = useMemo(
     () =>
       computeEmployeeLoads(
-        members.map((person) => ({
+        balanceSnapshotMembers.map((person) => ({
           user_id: person.user_id,
           display_name: person.display_name,
         })),
@@ -289,7 +294,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
           status: assignment.status,
         }))
       ),
-    [members, shifts, assignments]
+    [balanceSnapshotMembers, shifts, assignments]
   )
 
   function fillFromShiftType(id: string) {
@@ -647,8 +652,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     }
   }
 
-  const shouldUseFullWidthCalendar = isManager && viewMode === "calendar"
-
   function renderShiftCard(shift: Shift) {
     const assigned = (groupedAssignments[shift.id] || []).filter(
       (assignment) => assignment.status !== "dropped"
@@ -660,7 +663,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     return (
       <div
         key={shift.id}
-        className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-3.5 pl-4 shadow-sm"
+        className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-3 pl-4 shadow-sm"
       >
         <div
           className="absolute inset-y-0 left-0 w-1"
@@ -749,7 +752,7 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                   void assignMember(shift.id, value)
                   event.target.value = ""
                 }}
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none transition focus:border-slate-400"
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none transition focus:border-slate-400"
               >
                 <option value="">Select available employee</option>
                 {availablePeople.map((person) => (
@@ -774,12 +777,12 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
                     }))
                   }
                   placeholder="Write in name"
-                  className="h-10 rounded-xl px-3 text-xs"
+                  className="h-9 rounded-lg px-3 text-xs"
                 />
                 <Button
                   type="button"
                   variant="outline"
-                  className="h-10 rounded-xl text-xs"
+                  className="h-9 rounded-lg text-xs"
                   onClick={() => void assignManualName(shift.id)}
                 >
                   Add
@@ -796,128 +799,6 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
     )
   }
 
-  function renderCalendarSection() {
-    return (
-      <section className="rounded-[28px] border border-slate-200 bg-white p-4 shadow-sm lg:p-5 xl:p-6">
-        <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Weekly Schedule</h2>
-            <p className="text-sm text-slate-500">
-              Edit all seven days in one wide row without squeezing the shift cards.
-            </p>
-          </div>
-          <div className="text-xs text-slate-500">
-            Scroll horizontally on smaller desktop windows if needed.
-          </div>
-        </div>
-
-        <div className="-mx-4 overflow-x-auto px-4 pb-2 lg:-mx-5 lg:px-5 xl:-mx-6 xl:px-6">
-          <div className="grid min-w-[1680px] grid-cols-7 gap-4">
-            {calendarDates.map((date) => (
-              <div
-                key={date}
-                className="min-w-[220px] rounded-2xl border border-slate-200 bg-slate-50/80 p-3.5"
-              >
-                <div className="mb-3 border-b border-slate-200 pb-3">
-                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    {formatWeekday(date)}
-                  </div>
-                  <div className="mt-1 text-base font-semibold text-slate-900">
-                    {formatDateReadable(date)}
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  {(shiftsByDate[date] || []).length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-8 text-center text-sm text-slate-400">
-                      No shifts
-                    </div>
-                  ) : (
-                    (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-    )
-  }
-
-  function renderListSection() {
-    return (
-      <section className="space-y-4">
-        {shifts.length === 0 ? (
-          <div className="rounded-2xl border bg-white p-8 text-center text-sm text-slate-500">
-            No shifts created yet.
-          </div>
-        ) : (
-          calendarDates.map((date) => {
-            const dayShifts = shiftsByDate[date] || []
-            if (dayShifts.length === 0) return null
-
-            return (
-              <div key={date} className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="mb-4">
-                  <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    {formatWeekday(date)}
-                  </div>
-                  <div className="text-base font-semibold text-slate-900">
-                    {formatDateReadable(date)}
-                  </div>
-                </div>
-                <div className="space-y-3">{dayShifts.map((shift) => renderShiftCard(shift))}</div>
-              </div>
-            )
-          })
-        )}
-      </section>
-    )
-  }
-
-  function renderBalanceSnapshot() {
-    return (
-      <section className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Balance Snapshot</h2>
-            <p className="text-sm text-slate-500">Live shift and hour totals for the team.</p>
-          </div>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
-            {employeeLoads.length} employee{employeeLoads.length === 1 ? "" : "s"}
-          </span>
-        </div>
-
-        <div className="space-y-3">
-          {employeeLoads.length === 0 ? (
-            <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
-              No employee load data yet.
-            </div>
-          ) : (
-            employeeLoads.map((load: any) => (
-              <div key={load.user_id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="block truncate font-medium text-slate-900">{load.display_name}</span>
-                    <span className="mt-1 block text-xs text-slate-500">scheduled load</span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                      {load.shiftCount} shift{load.shiftCount === 1 ? "" : "s"}
-                    </span>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
-                      {Number(load.hours).toFixed(1)} hrs
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-    )
-  }
-
   if (!organization) {
     return <div className="rounded-2xl border bg-white p-6 text-sm text-slate-600">Select an organization to continue.</div>
   }
@@ -929,6 +810,49 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
   if (!period) {
     return <div className="rounded-2xl border bg-white p-6 text-sm text-slate-600">Schedule period not found.</div>
   }
+
+  const showFullWidthCalendarLayout = isManager && viewMode === "calendar"
+
+  const balanceSnapshot = (
+    <section className="sticky top-6 rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold text-slate-900">Balance Snapshot</h2>
+          <p className="text-sm text-slate-500">Live shift and hour totals for employees.</p>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600">
+          {employeeLoads.length} employee{employeeLoads.length === 1 ? "" : "s"}
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        {employeeLoads.length === 0 ? (
+          <div className="rounded-[20px] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500">
+            No employee load data yet.
+          </div>
+        ) : (
+          employeeLoads.map((load: any) => (
+            <div key={load.user_id} className="rounded-[22px] border border-slate-200 bg-slate-50 p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <span className="block truncate font-medium text-slate-900">{load.display_name}</span>
+                  <span className="mt-1 block text-xs text-slate-500">scheduled load</span>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                    {load.shiftCount} shift{load.shiftCount === 1 ? "" : "s"}
+                  </span>
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+                    {Number(load.hours).toFixed(1)} hrs
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  )
 
   return (
     <div className="space-y-6">
@@ -993,149 +917,225 @@ export function SchedulePeriodBuilder({ periodId }: { periodId: string }) {
         </div>
       </section>
 
-      {isManager ? (
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Add Shifts</h2>
-            <p className="text-sm text-slate-500">Create one shift or generate it across multiple dates.</p>
-          </div>
+      <div className={showFullWidthCalendarLayout ? "space-y-6" : "grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]"}>
+        <div className="space-y-6 min-w-0">
+          {isManager ? (
+            <section className="rounded-2xl border bg-white p-6 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">Add Shifts</h2>
+                <p className="text-sm text-slate-500">Create one shift or generate it across multiple dates.</p>
+              </div>
 
-          <form onSubmit={createSingleShift} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input type="date" value={newShiftDate} onChange={(event) => setNewShiftDate(event.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Shift type</Label>
-              <select
-                value={newShiftTypeId}
-                onChange={(event) => fillFromShiftType(event.target.value)}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-slate-400"
-              >
-                <option value="">Custom shift</option>
-                {shiftTypes.map((shiftType) => (
-                  <option key={shiftType.id} value={shiftType.id}>
-                    {shiftType.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Shift label</Label>
-              <Input value={newShiftLabel} onChange={(event) => setNewShiftLabel(event.target.value)} placeholder="Morning Shift" required />
-            </div>
-            <div className="space-y-2">
-              <Label>Required workers</Label>
-              <Input type="number" min="1" value={newShiftRequiredWorkers} onChange={(event) => setNewShiftRequiredWorkers(event.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Start time</Label>
-              <Input type="time" value={newShiftStart} onChange={(event) => setNewShiftStart(event.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label>End time</Label>
-              <Input type="time" value={newShiftEnd} onChange={(event) => setNewShiftEnd(event.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Shift color</Label>
-              <Input type="color" value={newShiftColor} onChange={(event) => setNewShiftColor(event.target.value)} className="h-11 w-20 rounded-xl p-1" />
-            </div>
-            <div className="flex items-end">
-              <Button type="submit" className="w-full">
-                Add Shift
-              </Button>
-            </div>
-          </form>
-
-          <div className="mt-6 space-y-3">
-            <div>
-              <h3 className="text-sm font-semibold text-slate-900">Bulk dates</h3>
-              <p className="text-xs text-slate-500">Select dates to create the same shift across the period.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {calendarDates.map((date) => {
-                const active = selectedBulkDates.includes(date)
-                return (
-                  <button
-                    key={date}
-                    type="button"
-                    onClick={() => toggleBulkDate(date)}
-                    className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                      active
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                    }`}
+              <form onSubmit={createSingleShift} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input type="date" value={newShiftDate} onChange={(event) => setNewShiftDate(event.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Shift type</Label>
+                  <select
+                    value={newShiftTypeId}
+                    onChange={(event) => fillFromShiftType(event.target.value)}
+                    className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-slate-400"
                   >
-                    {formatWeekday(date)} {new Date(`${date}T00:00:00`).getDate()}
-                  </button>
-                )
-              })}
-            </div>
-            <Button type="button" variant="outline" onClick={() => void createBulkShifts()}>
-              Create Bulk Shifts
-            </Button>
-          </div>
-        </section>
-      ) : null}
+                    <option value="">Custom shift</option>
+                    {shiftTypes.map((shiftType) => (
+                      <option key={shiftType.id} value={shiftType.id}>
+                        {shiftType.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Shift label</Label>
+                  <Input value={newShiftLabel} onChange={(event) => setNewShiftLabel(event.target.value)} placeholder="Morning Shift" required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Required workers</Label>
+                  <Input type="number" min="1" value={newShiftRequiredWorkers} onChange={(event) => setNewShiftRequiredWorkers(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Start time</Label>
+                  <Input type="time" value={newShiftStart} onChange={(event) => setNewShiftStart(event.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>End time</Label>
+                  <Input type="time" value={newShiftEnd} onChange={(event) => setNewShiftEnd(event.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Shift color</Label>
+                  <Input type="color" value={newShiftColor} onChange={(event) => setNewShiftColor(event.target.value)} className="h-11 w-20 rounded-xl p-1" />
+                </div>
+                <div className="flex items-end">
+                  <Button type="submit" className="w-full">
+                    Add Shift
+                  </Button>
+                </div>
+              </form>
 
-      {editingShiftId ? (
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Edit Shift</h2>
-            <p className="text-sm text-slate-500">Update the selected shift without leaving the builder.</p>
-          </div>
+              <div className="mt-6 space-y-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">Bulk dates</h3>
+                  <p className="text-xs text-slate-500">Select dates to create the same shift across the period.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {calendarDates.map((date) => {
+                    const active = selectedBulkDates.includes(date)
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => toggleBulkDate(date)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                          active
+                            ? "border-slate-900 bg-slate-900 text-white"
+                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                        }`}
+                      >
+                        {formatWeekday(date)} {new Date(`${date}T00:00:00`).getDate()}
+                      </button>
+                    )
+                  })}
+                </div>
+                <Button type="button" variant="outline" onClick={() => void createBulkShifts()}>
+                  Create Bulk Shifts
+                </Button>
+              </div>
+            </section>
+          ) : null}
 
-          <form onSubmit={saveShiftEdits} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="space-y-2">
-              <Label>Date</Label>
-              <Input type="date" value={editShiftDate} onChange={(event) => setEditShiftDate(event.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label>Required workers</Label>
-              <Input type="number" min="1" value={editShiftRequiredWorkers} onChange={(event) => setEditShiftRequiredWorkers(event.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>Shift color</Label>
-              <Input type="color" value={editShiftColor} onChange={(event) => setEditShiftColor(event.target.value)} className="h-11 w-20 rounded-xl p-1" />
-            </div>
-            <div className="space-y-2">
-              <Label>Shift label</Label>
-              <Input value={editShiftLabel} onChange={(event) => setEditShiftLabel(event.target.value)} placeholder="Morning Shift" required />
-            </div>
-            <div className="space-y-2">
-              <Label>Start time</Label>
-              <Input type="time" value={editShiftStart} onChange={(event) => setEditShiftStart(event.target.value)} required />
-            </div>
-            <div className="space-y-2">
-              <Label>End time</Label>
-              <Input type="time" value={editShiftEnd} onChange={(event) => setEditShiftEnd(event.target.value)} required />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button type="submit">Save Changes</Button>
-              <Button type="button" variant="outline" onClick={cancelEditingShift}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </section>
-      ) : null}
+          {editingShiftId ? (
+            <section className="rounded-2xl border bg-white p-6 shadow-sm">
+              <div className="mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">Edit Shift</h2>
+                <p className="text-sm text-slate-500">Update the selected shift without leaving the builder.</p>
+              </div>
 
-      {shouldUseFullWidthCalendar ? (
-        <div className="space-y-6">
-          {renderCalendarSection()}
-          {renderBalanceSnapshot()}
+              <form onSubmit={saveShiftEdits} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="space-y-2">
+                  <Label>Date</Label>
+                  <Input type="date" value={editShiftDate} onChange={(event) => setEditShiftDate(event.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Required workers</Label>
+                  <Input type="number" min="1" value={editShiftRequiredWorkers} onChange={(event) => setEditShiftRequiredWorkers(event.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Shift color</Label>
+                  <Input type="color" value={editShiftColor} onChange={(event) => setEditShiftColor(event.target.value)} className="h-11 w-20 rounded-xl p-1" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Shift label</Label>
+                  <Input value={editShiftLabel} onChange={(event) => setEditShiftLabel(event.target.value)} placeholder="Morning Shift" required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Start time</Label>
+                  <Input type="time" value={editShiftStart} onChange={(event) => setEditShiftStart(event.target.value)} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>End time</Label>
+                  <Input type="time" value={editShiftEnd} onChange={(event) => setEditShiftEnd(event.target.value)} required />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Button type="submit">Save Changes</Button>
+                  <Button type="button" variant="outline" onClick={cancelEditingShift}>
+                    Cancel
+                  </Button>
+                </div>
+              </form>
+            </section>
+          ) : null}
+
+          {viewMode === "calendar" ? (
+            <section className={showFullWidthCalendarLayout ? "space-y-4" : "space-y-4"}>
+              {showFullWidthCalendarLayout ? (
+                <div className="overflow-x-auto pb-2">
+                  <div className="grid min-w-[1680px] grid-cols-7 gap-4">
+                    {calendarDates.map((date) => (
+                      <div key={date} className="min-w-[220px] rounded-xl border bg-slate-50/70 p-3">
+                        <div className="mb-3">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            {formatWeekday(date)}
+                          </div>
+                          <div className="text-sm font-semibold text-slate-900">
+                            {formatDateReadable(date)}
+                          </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          {(shiftsByDate[date] || []).length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-center text-sm text-slate-400">
+                              No shifts
+                            </div>
+                          ) : (
+                            (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+                  {calendarDates.map((date) => (
+                    <div key={date} className="min-w-0 rounded-xl border bg-slate-50/70 p-3">
+                      <div className="mb-3">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {formatWeekday(date)}
+                        </div>
+                        <div className="text-sm font-semibold text-slate-900">
+                          {formatDateReadable(date)}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {(shiftsByDate[date] || []).length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-slate-300 bg-white/70 px-4 py-6 text-center text-sm text-slate-400">
+                            No shifts
+                          </div>
+                        ) : (
+                          (shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : (
+            <section className="space-y-4">
+              {shifts.length === 0 ? (
+                <div className="rounded-2xl border bg-white p-8 text-center text-sm text-slate-500">
+                  No shifts created yet.
+                </div>
+              ) : (
+                calendarDates.map((date) => {
+                  const dayShifts = shiftsByDate[date] || []
+                  if (dayShifts.length === 0) return null
+
+                  return (
+                    <div key={date} className="rounded-2xl border bg-white p-4 shadow-sm">
+                      <div className="mb-4">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                          {formatWeekday(date)}
+                        </div>
+                        <div className="text-base font-semibold text-slate-900">
+                          {formatDateReadable(date)}
+                        </div>
+                      </div>
+                      <div className="space-y-3">{dayShifts.map((shift) => renderShiftCard(shift))}</div>
+                    </div>
+                  )
+                })
+              )}
+            </section>
+          )}
+
+          {showFullWidthCalendarLayout ? balanceSnapshot : null}
         </div>
-      ) : (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="space-y-6">
-            {viewMode === "calendar" ? renderCalendarSection() : renderListSection()}
-          </div>
 
-          <aside className="space-y-6">
-            <div className="sticky top-6">{renderBalanceSnapshot()}</div>
-          </aside>
-        </div>
-      )}
+        {!showFullWidthCalendarLayout ? <aside className="space-y-6">{balanceSnapshot}</aside> : null}
+      </div>
     </div>
   )
 }

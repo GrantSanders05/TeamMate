@@ -1,0 +1,113 @@
+TEAMMATE PACK 7 — MANAGER SCHEDULE BUILDER LAYOUT FIX
+
+Target file:
+components/schedule/schedule-period-builder.tsx
+
+This is the file driving the crushed manager calendar editor. The issue is not the data — it is the calendar layout allowing each day column to shrink too far.
+
+APPLY THESE CHANGES INSIDE THE CALENDAR VIEW BRANCH:
+
+1) Wrap the calendar week grid in a horizontal overflow container.
+
+Find the block inside:
+viewMode === "calendar" ? (
+  {calendarDates.map((date) => (
+
+Replace that calendar branch with this structure:
+
+<div className="overflow-x-auto pb-2">
+  <div className="grid min-w-[1820px] grid-cols-7 gap-4 xl:min-w-0 xl:grid-cols-7">
+    {calendarDates.map((date) => (
+      <div
+        key={date}
+        className="min-w-[240px] rounded-3xl border border-slate-200 bg-slate-50/70 p-4 align-top"
+      >
+        <div className="mb-4 border-b border-slate-200 pb-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+            {formatWeekday(date)}
+          </p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">
+            {formatDateReadable(date)}
+          </p>
+        </div>
+
+        {(shiftsByDate[date] || []).length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-4 text-sm text-slate-500">
+            No shifts
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {(shiftsByDate[date] || []).map((shift) => renderShiftCard(shift))}
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+</div>
+
+2) Give the main builder shell more room.
+
+Search in the same file for the outermost wrapper around the page content and change its width classes to:
+
+className="mx-auto w-full max-w-[1800px] space-y-6 px-4 py-6 xl:px-6 2xl:px-8"
+
+If the file already has a max width like max-w-7xl or max-w-[1400px], replace it with max-w-[1800px].
+
+3) Make each shift card taller and easier to scan.
+
+Inside renderShiftCard(shift), update the outer card wrapper className to this pattern:
+
+className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+
+4) Tighten the top row of each shift card and stop the title/time from clipping.
+
+Use this structure at the top of renderShiftCard:
+
+<div className="flex items-start justify-between gap-2">
+  <div className="min-w-0">
+    <h4 className="truncate text-sm font-semibold text-slate-950">{shift.label}</h4>
+    <p className="mt-1 text-sm text-slate-600">{formatTimeRange(shift.start_time, shift.end_time)}</p>
+  </div>
+
+  {isManager && period?.status !== "published" ? (
+    <div className="flex items-center gap-1">
+      ...existing edit/delete buttons...
+    </div>
+  ) : null}
+</div>
+
+5) Add spacing between the assignment sections.
+
+Where the card stacks the assignment chips, select, and manual write-in row, make the card body wrapper:
+
+<div className="mt-4 space-y-4">
+  ...existing card body content...
+</div>
+
+6) Make the assign select and manual write-in controls full width.
+
+For the employee select:
+className="h-10 w-full rounded-xl text-sm"
+
+For the manual write-in input:
+className="h-10 flex-1 rounded-xl px-3 text-sm"
+
+For the add button beside it:
+className="h-10 rounded-xl px-4"
+
+7) Keep the balance snapshot below the calendar, but do not let it steal width from the week row.
+
+The week row should live in its own overflow-x-auto wrapper.
+The balance snapshot should remain a separate section AFTER that wrapper, not beside it.
+
+WHY THIS FIX WORKS:
+- Each day column gets a hard minimum width.
+- The page can scroll horizontally on tighter screens instead of crushing seven columns.
+- The builder container is allowed to use more desktop width.
+- Shift cards get more readable internal spacing.
+
+EXPECTED RESULT:
+- All 7 days stay visible in one calendar row.
+- Cards stop looking skinny and smushed.
+- Assign employee controls become readable.
+- Manager editing finally feels like a schedule builder again.

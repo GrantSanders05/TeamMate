@@ -2,20 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import {
-  ArrowRight,
-  CalendarClock,
-  ClipboardCheck,
-  Clock3,
-  Layers3,
-} from "lucide-react"
+import { ArrowRight, CalendarClock, ClipboardCheck, Clock3, FolderOpenDot } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/client"
-import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 import { PageShell } from "@/components/shared/page-shell"
 import { SectionCard } from "@/components/shared/section-card"
-
+import { createClient } from "@/lib/supabase/client"
+import { useOrgSafe } from "@/lib/hooks/use-org-safe"
 
 type Period = {
   id: string
@@ -43,6 +36,14 @@ function formatDate(value: string) {
   })
 }
 
+function formatShortDate(value: string) {
+  return new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  })
+}
+
 function formatTimeRange(start: string, end: string) {
   const clean = (value: string) => {
     const [hourRaw, minute = "00"] = value.split(":")
@@ -58,12 +59,10 @@ function formatTimeRange(start: string, end: string) {
 function calculateHours(start: string, end: string) {
   const [startH, startM] = start.split(":").map(Number)
   const [endH, endM] = end.split(":").map(Number)
-
   const startMinutes = startH * 60 + startM
   let endMinutes = endH * 60 + endM
 
   if (endMinutes < startMinutes) endMinutes += 24 * 60
-
   return (endMinutes - startMinutes) / 60
 }
 
@@ -72,57 +71,54 @@ function formatHours(hours: number) {
   return Number.isInteger(rounded) ? `${rounded.toFixed(0)} hrs` : `${rounded.toFixed(1)} hrs`
 }
 
-function DashboardStat({ label, value }: { label: string; value: string }) {
+function StatTile({ label, value, helper }: { label: string; value: string; helper: string }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-      <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-        {label}
-      </div>
-      <div className="mt-1 text-base font-semibold text-slate-900">{value}</div>
+    <div className="rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-1 text-sm text-slate-600">{helper}</p>
     </div>
   )
 }
 
-function DashboardActionCard({
-  eyebrow,
+function QuickActionCard({
+  label,
   title,
-  description,
+  body,
   href,
-  buttonLabel,
+  cta,
   icon,
   tone = "blue",
 }: {
-  eyebrow: string
+  label: string
   title: string
-  description: string
+  body: string
   href: string
-  buttonLabel: string
+  cta: string
   icon: React.ReactNode
   tone?: "blue" | "emerald"
 }) {
-  const toneClasses =
+  const styles =
     tone === "emerald"
-      ? "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70"
-      : "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-100/70"
+      ? "border-emerald-200/80 from-emerald-50 via-white to-emerald-100/70"
+      : "border-blue-200/80 from-blue-50 via-white to-indigo-100/70"
 
   return (
-    <div className={`rounded-3xl border p-5 shadow-sm ${toneClasses}`}>
-      <div className="flex items-start justify-between gap-3">
+    <div className={`rounded-3xl border bg-gradient-to-br p-5 shadow-sm ${styles}`}>
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
-            {eyebrow}
-          </div>
-          <h3 className="mt-2 text-lg font-semibold text-slate-900">{title}</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
+          <h3 className="mt-2 text-lg font-semibold text-slate-950">{title}</h3>
         </div>
-        <div className="rounded-2xl bg-white/85 p-2.5 text-slate-700 shadow-sm">{icon}</div>
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-2.5 text-slate-700 shadow-sm">{icon}</div>
       </div>
 
-      <p className="mt-3 text-sm leading-6 text-slate-600">{description}</p>
+      <p className="mt-3 text-sm leading-6 text-slate-600">{body}</p>
 
-      <Button asChild className="mt-5 w-full justify-between" size="lg">
+      <Button asChild className="mt-4 h-11 rounded-xl px-4">
         <Link href={href}>
-          {buttonLabel}
-          <ArrowRight className="h-4 w-4" />
+          {cta}
+          <ArrowRight className="ml-2 h-4 w-4" />
         </Link>
       </Button>
     </div>
@@ -152,10 +148,7 @@ export function EmployeeDashboard() {
         .in("status", ["collecting", "published"])
         .order("start_date", { ascending: true })
 
-      const collecting = ((periodsData as Period[]) || []).filter(
-        (period) => period.status === "collecting",
-      )
-
+      const collecting = ((periodsData as Period[]) || []).filter((period) => period.status === "collecting")
       const published = ((periodsData as Period[]) || [])
         .filter((period) => period.status === "published")
         .sort((a, b) => `${b.start_date}`.localeCompare(`${a.start_date}`))
@@ -180,9 +173,7 @@ export function EmployeeDashboard() {
             .eq("status", "assigned")
             .in("shift_id", shiftIds)
 
-          const assignedShiftIds = new Set(
-            (assignmentData || []).map((assignment: any) => assignment.shift_id),
-          )
+          const assignedShiftIds = new Set((assignmentData || []).map((assignment: any) => assignment.shift_id))
 
           loadedShifts = (shiftsData || [])
             .filter((shift: any) => assignedShiftIds.has(shift.id))
@@ -215,10 +206,7 @@ export function EmployeeDashboard() {
   const latestPublished = useMemo(() => publishedPeriods[0] || null, [publishedPeriods])
   const nextShift = useMemo(() => myShifts[0] || null, [myShifts])
 
-  const availabilityHref = collectingPeriods[0]
-    ? `/availability/${collectingPeriods[0].id}`
-    : "/availability"
-
+  const availabilityHref = collectingPeriods[0] ? `/availability/${collectingPeriods[0].id}` : "/availability"
   const scheduleHref = latestPublished
     ? `/my-schedule/${latestPublished.id}`
     : nextShift
@@ -231,216 +219,170 @@ export function EmployeeDashboard() {
   }, [latestPublished, myShifts])
 
   const latestPublishedHours = useMemo(
-    () =>
-      shiftsInLatestPublished.reduce(
-        (total, shift) => total + calculateHours(shift.start_time, shift.end_time),
-        0,
-      ),
+    () => shiftsInLatestPublished.reduce((total, shift) => total + calculateHours(shift.start_time, shift.end_time), 0),
     [shiftsInLatestPublished],
   )
 
   if (!organization) {
-    return <div className="p-6 text-sm text-slate-600">No organization selected.</div>
-  }
-
-  if (loading) {
-    return <div className="p-6 text-sm text-slate-600">Loading dashboard...</div>
+    return null
   }
 
   return (
     <PageShell
-      title="Dashboard"
-      subtitle="Your schedule, availability, and next shift all in one place."
-      className="space-y-6"
+      title="Employee Dashboard"
+      description="Quick access to availability, your posted schedule, and the next shift you need to know about."
     >
-      <SectionCard className="overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-sm">
-        <div className="bg-gradient-to-br from-slate-50 via-white to-blue-50/70 p-5 sm:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-stretch">
-            <div className="flex-1 space-y-4">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">
-                  Employee overview
+      <SectionCard>
+        {loading ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-sm">
+            Loading your dashboard…
+          </div>
+        ) : (
+          <div className="space-y-5">
+            <div className="rounded-[28px] border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/80 p-5 shadow-sm">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Overview</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-950">Everything you need, right here.</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+                    Check whether availability is needed, jump into the published schedule, and see your next shift at a glance.
+                  </p>
                 </div>
-                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
-                  {nextShift
-                    ? `Next up: ${nextShift.label}`
-                    : collectingPeriods.length > 0
-                      ? "Availability needs your attention"
-                      : "You’re all caught up"}
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-slate-600">
-                  {nextShift
-                    ? `${formatDate(nextShift.date)} • ${formatTimeRange(nextShift.start_time, nextShift.end_time)}`
-                    : collectingPeriods.length > 0
-                      ? `${collectingPeriods[0].name} is open right now. Submit availability so your manager can build the schedule.`
-                      : "Use the quick links below to review your posted schedule or update your availability when a new period opens."}
-                </p>
+
+                {nextShift ? (
+                  <div className="rounded-2xl border border-blue-200 bg-blue-50/80 px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-blue-700">Next shift</p>
+                    <p className="mt-1 text-base font-semibold text-slate-950">{nextShift.label}</p>
+                    <p className="mt-1 text-sm text-slate-600">{formatShortDate(nextShift.date)} · {formatTimeRange(nextShift.start_time, nextShift.end_time)}</p>
+                  </div>
+                ) : null}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                <DashboardStat
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <StatTile
                   label="Availability"
-                  value={
-                    collectingPeriods.length > 0
-                      ? `${collectingPeriods.length} open`
-                      : "Caught up"
-                  }
+                  value={collectingPeriods.length > 0 ? "Needed" : "Done"}
+                  helper={collectingPeriods.length > 0 ? `${collectingPeriods.length} open period${collectingPeriods.length === 1 ? "" : "s"}` : "No open forms right now"}
                 />
-                <DashboardStat
-                  label="Next shift"
-                  value={nextShift ? formatDate(nextShift.date) : "Not assigned"}
-                />
-                <DashboardStat
+                <StatTile
                   label="Published shifts"
                   value={`${shiftsInLatestPublished.length}`}
+                  helper={latestPublished ? `In ${latestPublished.name}` : "No published schedule yet"}
                 />
-                <DashboardStat
+                <StatTile
                   label="Expected hours"
                   value={formatHours(latestPublishedHours)}
+                  helper={latestPublished ? "From the current published schedule" : "Hours will appear when posted"}
+                />
+                <StatTile
+                  label="Next date"
+                  value={nextShift ? formatShortDate(nextShift.date) : "—"}
+                  helper={nextShift ? nextShift.label : "No assigned shift yet"}
                 />
               </div>
             </div>
 
-            <div className="grid flex-1 gap-4 md:grid-cols-2 xl:max-w-[640px]">
-              <DashboardActionCard
-                eyebrow={collectingPeriods.length > 0 ? "Availability needed" : "Availability"}
-                title={
+            <div className="grid gap-4 lg:grid-cols-2">
+              <QuickActionCard
+                label="Availability needed"
+                title={collectingPeriods.length > 0 ? "Submit your availability" : "You are caught up"}
+                body={
                   collectingPeriods.length > 0
-                    ? "Submit availability"
-                    : "Availability is up to date"
-                }
-                description={
-                  collectingPeriods.length > 0
-                    ? "Go straight to the active form so your manager sees your availability right away."
-                    : "There are no open periods right now, but you can still review your availability page."
+                    ? `There ${collectingPeriods.length === 1 ? "is" : "are"} ${collectingPeriods.length} open availability period${collectingPeriods.length === 1 ? "" : "s"}. Go straight to the form and update your days quickly.`
+                    : "There are no open availability forms right now, so you do not need to submit anything at the moment."
                 }
                 href={availabilityHref}
-                buttonLabel={collectingPeriods.length > 0 ? "Open form" : "Open availability"}
+                cta={collectingPeriods.length > 0 ? "Open availability form" : "View availability"}
                 icon={<ClipboardCheck className="h-5 w-5" />}
-                tone="emerald"
               />
 
-              <DashboardActionCard
-                eyebrow="My schedule"
-                title={latestPublished ? latestPublished.name : "View my schedule"}
-                description={
-                  nextShift
-                    ? `Your next shift is ${formatDate(nextShift.date)} at ${formatTimeRange(nextShift.start_time, nextShift.end_time)}.`
-                    : "Jump straight into the latest posted schedule and see where you work next."
+              <QuickActionCard
+                label="My schedule"
+                title={latestPublished ? "Open your posted schedule" : "Schedule not posted yet"}
+                body={
+                  latestPublished
+                    ? `See your assigned shifts, teammates, and the full published schedule for ${latestPublished.name}.`
+                    : "Once a schedule is published, you will be able to jump straight into it here."
                 }
                 href={scheduleHref}
-                buttonLabel="Open schedule"
+                cta={latestPublished ? "Open my schedule" : "View schedule page"}
                 icon={<CalendarClock className="h-5 w-5" />}
+                tone="emerald"
               />
+            </div>
+
+            <div className="grid gap-4 xl:grid-cols-[1.35fr_0.95fr]">
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Upcoming shifts</p>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-950">What’s coming up next</h3>
+                  </div>
+                  <Clock3 className="h-5 w-5 text-slate-400" />
+                </div>
+
+                {myShifts.length === 0 ? (
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    You do not have any assigned shifts in a published schedule yet.
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {myShifts.slice(0, 4).map((shift) => (
+                      <Link
+                        key={shift.shift_id}
+                        href={`/my-schedule/${shift.period_id}`}
+                        className="block rounded-2xl border border-slate-200 bg-slate-50/70 p-4 transition hover:border-slate-300 hover:bg-white"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-base font-semibold text-slate-950">{shift.label}</p>
+                            <p className="mt-1 text-sm text-slate-600">{formatShortDate(shift.date)} · {formatTimeRange(shift.start_time, shift.end_time)}</p>
+                            <p className="mt-2 text-xs font-medium uppercase tracking-[0.14em] text-slate-500">{shift.period_name}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1 text-sm font-medium text-slate-700">
+                            Open
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Open periods</p>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-950">Availability links</h3>
+                  </div>
+                  <FolderOpenDot className="h-5 w-5 text-slate-400" />
+                </div>
+
+                {collectingPeriods.length === 0 ? (
+                  <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                    You are caught up on availability right now.
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {collectingPeriods.map((period) => (
+                      <div key={period.id} className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                        <p className="text-base font-semibold text-slate-950">{period.name}</p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {formatDate(period.start_date)} – {formatDate(period.end_date)}
+                        </p>
+                        <Button asChild variant="outline" className="mt-4 h-10 rounded-xl">
+                          <Link href={`/availability/${period.id}`}>Open period</Link>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </SectionCard>
-
-      <div className="grid gap-6 xl:grid-cols-[1.35fr_0.95fr]">
-        <SectionCard
-          title="Upcoming shifts"
-          description="Your next few assigned shifts from published schedules."
-          className="rounded-[28px] border border-slate-200 bg-white shadow-sm"
-        >
-          {myShifts.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-sm text-slate-500">
-              You do not have any assigned shifts in a published schedule yet.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {myShifts.slice(0, 5).map((shift, index) => (
-                <div
-                  key={shift.shift_id}
-                  className={`rounded-2xl border px-4 py-4 shadow-sm ${
-                    index === 0
-                      ? "border-blue-200 bg-blue-50/60"
-                      : "border-slate-200 bg-white"
-                  }`}
-                >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <div className="text-base font-semibold text-slate-900">{shift.label}</div>
-                      <div className="mt-1 text-sm text-slate-600">
-                        {formatDate(shift.date)} • {formatTimeRange(shift.start_time, shift.end_time)}
-                      </div>
-                      <div className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                        {shift.period_name}
-                      </div>
-                    </div>
-
-                    <Button asChild variant="outline" className="sm:self-start">
-                      <Link href={`/my-schedule/${shift.period_id}`}>Open schedule</Link>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        <div className="space-y-6">
-          <SectionCard
-            title="Open availability periods"
-            description="Respond to any period your manager still needs from you."
-            className="rounded-[28px] border border-slate-200 bg-white shadow-sm"
-          >
-            {collectingPeriods.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-4 py-8 text-sm text-slate-500">
-                You are caught up on availability right now.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {collectingPeriods.map((period) => (
-                  <div
-                    key={period.id}
-                    className="rounded-2xl border border-emerald-200 bg-emerald-50/60 px-4 py-4 shadow-sm"
-                  >
-                    <div className="text-sm font-semibold text-slate-900">{period.name}</div>
-                    <div className="mt-1 text-sm text-slate-600">
-                      {formatDate(period.start_date)} – {formatDate(period.end_date)}
-                    </div>
-                    <Button asChild className="mt-4 w-full" variant="outline">
-                      <Link href={`/availability/${period.id}`}>Open form</Link>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Current published schedule"
-            description="Your totals for the most recent published period."
-            className="rounded-[28px] border border-slate-200 bg-white shadow-sm"
-          >
-            <div className="grid gap-3 sm:grid-cols-2">
-              <DashboardStat
-                label="Schedule"
-                value={latestPublished?.name || "No published period"}
-              />
-              <DashboardStat
-                label="Expected hours"
-                value={formatHours(latestPublishedHours)}
-              />
-              <DashboardStat
-                label="Shift count"
-                value={`${shiftsInLatestPublished.length}`}
-              />
-              <DashboardStat
-                label="Next shift time"
-                value={nextShift ? formatTimeRange(nextShift.start_time, nextShift.end_time) : "—"}
-              />
-            </div>
-
-            <Button asChild className="mt-4 w-full" variant="outline">
-              <Link href={scheduleHref}>Go to my schedule</Link>
-            </Button>
-          </SectionCard>
-        </div>
-      </div>
     </PageShell>
   )
 }
-
-export default EmployeeDashboard

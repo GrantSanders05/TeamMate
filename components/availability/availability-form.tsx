@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { createClient } from "@/lib/supabase/client"
@@ -40,6 +41,7 @@ type AvailabilityState = {
 export function AvailabilityForm({ periodId }: { periodId: string }) {
   const supabase = createClient()
   const { organization, member, isLoading } = useOrgSafe()
+
   const [period, setPeriod] = useState<Period | null>(null)
   const [shifts, setShifts] = useState<Shift[]>([])
   const [responses, setResponses] = useState<Record<string, AvailabilityState>>({})
@@ -77,15 +79,21 @@ export function AvailabilityForm({ periodId }: { periodId: string }) {
         .from("availability_responses")
         .select("id, shift_id, employee_id, status, notes")
         .eq("employee_id", member.user_id)
-        .in("shift_id", normalizedShifts.map((shift) => shift.id))
+        .in(
+          "shift_id",
+          normalizedShifts.map((shift) => shift.id),
+        )
 
-      const mapped = ((responseData as AvailabilityRow[]) || []).reduce<Record<string, AvailabilityState>>((acc, row) => {
-        acc[row.shift_id] = {
-          status: row.status === "all_day" ? "available" : row.status,
-          notes: row.notes || "",
-        }
-        return acc
-      }, {})
+      const mapped = ((responseData as AvailabilityRow[]) || []).reduce<Record<string, AvailabilityState>>(
+        (acc, row) => {
+          acc[row.shift_id] = {
+            status: row.status === "all_day" ? "available" : row.status,
+            notes: row.notes || "",
+          }
+          return acc
+        },
+        {},
+      )
 
       setResponses(mapped)
     } else {
@@ -127,6 +135,19 @@ export function AvailabilityForm({ periodId }: { periodId: string }) {
     }))
   }
 
+  function setDayStatus(dayShifts: Shift[], status: "available" | "unavailable") {
+    setResponses((prev) => {
+      const next = { ...prev }
+      for (const shift of dayShifts) {
+        next[shift.id] = {
+          status,
+          notes: prev[shift.id]?.notes || "",
+        }
+      }
+      return next
+    })
+  }
+
   async function saveAvailability() {
     if (!member?.user_id || !period) return
 
@@ -164,111 +185,154 @@ export function AvailabilityForm({ periodId }: { periodId: string }) {
   }
 
   if (isLoading || loading) {
-    return <div className="section-card text-sm text-slate-600">Loading availability...</div>
+    return <div>Loading availability...</div>
   }
 
   if (!organization || !member) {
-    return <div className="section-card text-sm text-slate-600">No active organization selected.</div>
+    return <div>No active organization selected.</div>
   }
 
   if (!period) {
-    return <div className="section-card text-sm text-slate-600">Schedule period not found.</div>
+    return <div>Schedule period not found.</div>
   }
 
   const locked = period.status !== "collecting"
 
   return (
-    <div className="space-y-6">
-      <div className="section-card">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-950">{period.name}</h1>
+    <div className="space-y-5">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{period.name}</h1>
         <p className="mt-2 text-sm text-slate-600">
           {formatDisplayDate(period.start_date)} – {formatDisplayDate(period.end_date)} · Status: {period.status}
         </p>
-        <p className="mt-3 text-sm text-slate-600">
-          Mark each shift as available or unavailable. Times now use a 12-hour clock for easier scanning.
+        <p className="mt-3 text-sm leading-6 text-slate-600">
+          Mark each shift as available or unavailable. You can now set a full day at once when a date has multiple shifts.
         </p>
       </div>
 
       {locked ? (
-        <div className="rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
           Availability is locked because this period is no longer in collecting status.
         </div>
       ) : null}
 
       {Object.keys(shiftsByDate).length === 0 ? (
-        <div className="section-card text-sm text-slate-600">No shifts have been added to this period yet.</div>
+        <div className="rounded-3xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-600">
+          No shifts have been added to this period yet.
+        </div>
       ) : (
         <div className="space-y-5">
-          {Object.entries(shiftsByDate).map(([date, dayShifts]) => (
-            <section key={date} className="section-card space-y-4">
-              <div className="border-b border-slate-200 pb-3">
-                <h2 className="text-xl font-semibold text-slate-950">{formatDisplayDate(date)}</h2>
-              </div>
+          {Object.entries(shiftsByDate).map(([date, dayShifts]) => {
+            const allAvailable = dayShifts.every(
+              (shift) => (responses[shift.id] || { status: "", notes: "" }).status === "available",
+            )
+            const allUnavailable = dayShifts.every(
+              (shift) => (responses[shift.id] || { status: "", notes: "" }).status === "unavailable",
+            )
 
-              <div className="space-y-4">
-                {dayShifts.map((shift) => {
-                  const current = responses[shift.id] || { status: "", notes: "" }
-                  const availableActive = current.status === "available"
-                  const unavailableActive = current.status === "unavailable"
+            return (
+              <section key={date} className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">{formatDisplayDate(date)}</h2>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {dayShifts.length} shift{dayShifts.length === 1 ? "" : "s"} scheduled for this day.
+                    </p>
+                  </div>
 
-                  return (
-                    <div key={shift.id} className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-950">{shift.label}</h3>
-                          <p className="mt-1 text-sm text-slate-600">
-                            {formatDisplayTimeRange(shift.start_time, shift.end_time)} · {shift.required_workers} worker{shift.required_workers === 1 ? "" : "s"} needed
-                          </p>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => setDayStatus(dayShifts, "available")}
+                      disabled={locked}
+                      className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                        allAvailable
+                          ? "border-emerald-600 bg-emerald-600 text-white"
+                          : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      Available all day
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDayStatus(dayShifts, "unavailable")}
+                      disabled={locked}
+                      className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                        allUnavailable
+                          ? "border-rose-600 bg-rose-600 text-white"
+                          : "border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      Unavailable all day
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-4">
+                  {dayShifts.map((shift) => {
+                    const current = responses[shift.id] || { status: "", notes: "" }
+                    const availableActive = current.status === "available"
+                    const unavailableActive = current.status === "unavailable"
+
+                    return (
+                      <div key={shift.id} className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                          <div>
+                            <h3 className="text-base font-semibold text-slate-900">{shift.label}</h3>
+                            <p className="mt-1 text-sm text-slate-600">
+                              {formatDisplayTimeRange(shift.start_time, shift.end_time)} · {shift.required_workers} worker{shift.required_workers === 1 ? "" : "s"} needed
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:min-w-[270px]">
+                            <button
+                              type="button"
+                              onClick={() => setShiftStatus(shift.id, "available")}
+                              disabled={locked}
+                              className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                                availableActive
+                                  ? "border-emerald-600 bg-emerald-600 text-white"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                              } disabled:cursor-not-allowed disabled:opacity-60`}
+                            >
+                              Available
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setShiftStatus(shift.id, "unavailable")}
+                              disabled={locked}
+                              className={`rounded-2xl border px-4 py-2.5 text-sm font-semibold transition ${
+                                unavailableActive
+                                  ? "border-rose-600 bg-rose-600 text-white"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                              } disabled:cursor-not-allowed disabled:opacity-60`}
+                            >
+                              Unavailable
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setShiftStatus(shift.id, "available")}
+                        <div className="mt-4">
+                          <Textarea
+                            value={current.notes}
+                            onChange={(event) => setShiftNotes(shift.id, event.target.value)}
+                            placeholder="Optional note"
+                            className="min-h-[96px] rounded-2xl bg-white"
                             disabled={locked}
-                            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                              availableActive
-                                ? "border-emerald-600 bg-emerald-600 text-white"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                            }`}
-                          >
-                            Available
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setShiftStatus(shift.id, "unavailable")}
-                            disabled={locked}
-                            className={`rounded-2xl border px-4 py-2 text-sm font-semibold transition ${
-                              unavailableActive
-                                ? "border-rose-600 bg-rose-600 text-white"
-                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
-                            }`}
-                          >
-                            Unavailable
-                          </button>
+                          />
                         </div>
                       </div>
-
-                      <div className="mt-4">
-                        <Textarea
-                          value={current.notes}
-                          onChange={(event) => setShiftNotes(shift.id, event.target.value)}
-                          placeholder="Optional note"
-                          className="min-h-[96px] rounded-2xl bg-white"
-                          disabled={locked}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          ))}
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
         </div>
       )}
 
-      <div className="flex justify-end">
-        <Button onClick={() => void saveAvailability()} disabled={saving || locked} className="rounded-2xl px-5">
+      <div className="sticky bottom-4 flex justify-end">
+        <Button onClick={() => void saveAvailability()} disabled={saving || locked} className="rounded-2xl px-5 shadow-lg">
           {saving ? "Saving..." : "Save Availability"}
         </Button>
       </div>

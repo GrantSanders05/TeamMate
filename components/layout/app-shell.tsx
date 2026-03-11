@@ -1,52 +1,34 @@
 "use client"
 
-import type { ReactNode } from "react"
-import { MobileNav } from "@/components/layout/mobile-nav"
+import { ReactNode } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
-import { TopBar } from "@/components/layout/top-bar"
-import { AppFooter } from "@/components/layout/app-footer"
-import { OrgProvider } from "@/lib/hooks/use-organization"
+import { MobileNav } from "@/components/layout/mobile-nav"
+import { Footer } from "@/components/layout/footer"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
+import { buildBrandStyleVars } from "@/lib/branding"
 
-function AppShellInner({
-  children,
-  userEmail,
-}: {
-  children: ReactNode
-  userEmail: string
-}) {
+export function AppShell({ children }: { children: ReactNode }) {
   const { organization } = useOrgSafe()
-  const fontFamily = organization?.font_family || "Inter"
+  const styleVars = buildBrandStyleVars(organization)
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900" style={{ fontFamily }}>
+    <div className="min-h-screen bg-slate-100" style={styleVars}>
       <div className="flex min-h-screen">
         <Sidebar />
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-          <TopBar />
-          <main className="flex-1 pb-[calc(7rem+env(safe-area-inset-bottom))] md:pb-10">
-            {children}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <main className="flex-1 px-3 pb-28 pt-3 md:px-6 md:pb-12 md:pt-6">
+            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
           </main>
-          <AppFooter />
+          <div className="hidden md:block">
+            <Footer />
+          </div>
         </div>
       </div>
-      <MobileNav />
+      <div className="md:hidden">
+        <MobileNav />
+      </div>
     </div>
   )
 }
 
-export function AppShell({
-  children,
-  userId,
-  userEmail,
-}: {
-  children: ReactNode
-  userId: string
-  userEmail: string
-}) {
-  return (
-    <OrgProvider userId={userId} userEmail={userEmail}>
-      <AppShellInner userEmail={userEmail}>{children}</AppShellInner>
-    </OrgProvider>
-  )
-}
+export default AppShell

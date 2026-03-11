@@ -1,14 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, type ChangeEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { ImagePlus, Link2 } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/components/ui/use-toast"
 import { useOrg } from "@/lib/hooks/use-organization"
+import { generateUniqueJoinCode } from "@/lib/organization/join-code"
 import {
   DEFAULT_FONT_FAMILY,
   DEFAULT_PRIMARY_COLOR,
@@ -25,17 +27,6 @@ function slugify(name: string) {
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
-}
-
-function createJoinCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-  let code = ""
-
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)]
-  }
-
-  return code
 }
 
 export function CreateOrganizationForm() {
@@ -67,29 +58,20 @@ export function CreateOrganizationForm() {
     let index = 1
 
     while (true) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("organizations")
         .select("id")
         .eq("slug", candidate)
         .maybeSingle()
 
+      if (error && error.code !== "PGRST116") {
+        throw new Error(error.message)
+      }
+
       if (!data) return candidate
 
       index += 1
       candidate = `${baseSlug}-${index}`
-    }
-  }
-
-  async function generateUniqueJoinCode() {
-    while (true) {
-      const candidate = createJoinCode()
-      const { data } = await supabase
-        .from("organizations")
-        .select("id")
-        .eq("join_code", candidate)
-        .maybeSingle()
-
-      if (!data) return candidate
     }
   }
 
@@ -99,16 +81,12 @@ export function CreateOrganizationForm() {
     }
 
     const ext = logoFile.name.split(".").pop()?.toLowerCase() || "png"
-    const filePath = `${userId}/${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}.${ext}`
+    const filePath = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
-    const { error } = await supabase.storage
-      .from("org-logos")
-      .upload(filePath, logoFile, {
-        cacheControl: "3600",
-        upsert: false,
-      })
+    const { error } = await supabase.storage.from("org-logos").upload(filePath, logoFile, {
+      cacheControl: "3600",
+      upsert: false,
+    })
 
     if (error) {
       throw new Error(error.message)
@@ -121,8 +99,8 @@ export function CreateOrganizationForm() {
     return publicUrl
   }
 
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
     setLoading(true)
 
     try {
@@ -135,17 +113,18 @@ export function CreateOrganizationForm() {
         throw new Error(userError?.message || "Please log in and try again.")
       }
 
-      const {
-        data: profile,
-        error: profileError,
-      } = await supabase.from("profiles").select("*").eq("id", user.id).single()
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", user.id)
+        .single()
 
       if (profileError) {
         throw new Error(profileError.message)
       }
 
       const slug = await generateUniqueSlug(name)
-      const joinCode = await generateUniqueJoinCode()
+      const joinCode = await generateUniqueJoinCode(supabase)
       const uploadedLogoUrl = await uploadLogo(user.id)
 
       const { data: organization, error: orgError } = await supabase
@@ -168,15 +147,13 @@ export function CreateOrganizationForm() {
         throw new Error(orgError?.message || "Could not create organization.")
       }
 
-      const { error: memberError } = await supabase
-        .from("organization_members")
-        .insert({
-          organization_id: organization.id,
-          user_id: user.id,
-          role: "manager",
-          display_name: profile.full_name || user.email || "Manager",
-          is_active: true,
-        })
+      const { error: memberError } = await supabase.from("organization_members").insert({
+        organization_id: organization.id,
+        user_id: user.id,
+        role: "manager",
+        display_name: profile.full_name || user.email || "Manager",
+        is_active: true,
+      })
 
       if (memberError) {
         throw new Error(memberError.message)
@@ -186,7 +163,7 @@ export function CreateOrganizationForm() {
 
       toast({
         title: "Organization created",
-        description: `${organization.name} is ready to use.`,
+        description: `${organization.name} is ready to use. Join code ${joinCode} was saved.`,
       })
 
       router.push("/dashboard")
@@ -202,148 +179,145 @@ export function CreateOrganizationForm() {
     }
   }
 
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h2 className="text-lg font-semibold text-slate-900">Create organization</h2>
-      <p className="mt-1 text-sm text-slate-500">
-        Start a new workspace for your team with custom branding.
-      </p>
+  function handleLogoUpload(event: ChangeEvent<HTMLInputElement>) {
+    setLogoFile(event.target.files?.[0] ?? null)
+  }
 
-      <form className="mt-4 space-y-4" onSubmit={handleCreate}>
-        <div>
-          <Label htmlFor="orgName">Organization name</Label>
-          <Input
-            id="orgName"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Acme Coffee"
-            required
-          />
+  return (
+    <form onSubmit={handleCreate} className="space-y-6">
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-slate-900">Create organization</h2>
+          <p className="text-sm text-slate-500">
+            Start a new workspace for your team with custom branding.
+          </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="primaryColor">Primary color</Label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="org-name">Organization name</Label>
             <Input
-              id="primaryColor"
+              id="org-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Acme Coffee"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="org-primary-color">Primary color</Label>
+            <Input
+              id="org-primary-color"
               type="color"
               value={primaryColor}
-              onChange={(e) => setPrimaryColor(e.target.value)}
+              onChange={(event) => setPrimaryColor(event.target.value)}
+              className="h-11 w-20 rounded-xl p-1"
             />
           </div>
 
-          <div>
-            <Label htmlFor="secondaryColor">Secondary color</Label>
+          <div className="space-y-2">
+            <Label htmlFor="org-secondary-color">Secondary color</Label>
             <Input
-              id="secondaryColor"
+              id="org-secondary-color"
               type="color"
               value={secondaryColor}
-              onChange={(e) => setSecondaryColor(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div>
-          <Label htmlFor="fontFamily">Font</Label>
-          <select
-            id="fontFamily"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={fontFamily}
-            onChange={(e) => setFontFamily(e.target.value)}
-          >
-            {FONT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <Label htmlFor="timezone">Timezone</Label>
-          <select
-            id="timezone"
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            value={timezone}
-            onChange={(e) => setTimezone(e.target.value)}
-          >
-            {TIMEZONE_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="space-y-4 rounded-xl border border-slate-200 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-slate-900">
-            <ImagePlus className="h-4 w-4" />
-            Logo
-          </div>
-
-          <div>
-            <Label htmlFor="logoFile">Upload logo</Label>
-            <Input
-              id="logoFile"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setLogoFile(e.target.files?.[0] ?? null)}
+              onChange={(event) => setSecondaryColor(event.target.value)}
+              className="h-11 w-20 rounded-xl p-1"
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="org-font">Font</Label>
+            <select
+              id="org-font"
+              value={fontFamily}
+              onChange={(event) => setFontFamily(event.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-slate-400"
+            >
+              {FONT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="org-timezone">Timezone</Label>
+            <select
+              id="org-timezone"
+              value={timezone}
+              onChange={(event) => setTimezone(event.target.value)}
+              className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-slate-400"
+            >
+              {TIMEZONE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="mb-6 flex items-center gap-2">
+          <ImagePlus className="h-4 w-4 text-slate-500" />
           <div>
-            <Label htmlFor="logoUrl">
-              <span className="inline-flex items-center gap-2">
-                <Link2 className="h-4 w-4" />
-                Or paste an image URL
-              </span>
-            </Label>
+            <h3 className="text-base font-semibold text-slate-900">Logo</h3>
+            <p className="text-sm text-slate-500">Upload a logo or paste a public image URL.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="org-logo-upload">Upload logo</Label>
+            <Input id="org-logo-upload" type="file" accept="image/*" onChange={handleLogoUpload} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="org-logo-url">Or paste an image URL</Label>
             <Input
-              id="logoUrl"
-              type="url"
+              id="org-logo-url"
               value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
+              onChange={(event) => setLogoUrl(event.target.value)}
               placeholder="https://example.com/logo.png"
             />
           </div>
         </div>
 
-        <div className="rounded-xl p-4 text-white shadow-sm" style={previewStyle}>
-          <div className="flex items-center gap-3">
-            {logoUrl || logoFile ? (
-              <div className="h-12 w-12 overflow-hidden rounded-lg bg-white/20">
-                {logoUrl ? (
-                  <img
-                    src={logoUrl}
-                    alt="Logo preview"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-xs text-white/80">
-                    File ready
-                  </div>
-                )}
-              </div>
-            ) : null}
+        {logoUrl || logoFile ? (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            {logoUrl ? "Logo URL ready" : "Logo file ready"}
+          </div>
+        ) : null}
+      </section>
 
-            <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-white/80">
-                Brand preview
-              </div>
-              <div className="mt-1 text-xl font-semibold">
-                {name || "Your organization"}
-              </div>
-              <div className="mt-1 text-sm text-white/80">
-                {fontFamily} · {timezone}
-              </div>
-            </div>
+      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <div className="mb-4 flex items-center gap-2">
+          <Link2 className="h-4 w-4 text-slate-500" />
+          <div>
+            <h3 className="text-base font-semibold text-slate-900">Brand preview</h3>
+            <p className="text-sm text-slate-500">
+              A stable join code is created once and stored with the organization.
+            </p>
           </div>
         </div>
 
-        <Button className="w-full" type="submit" disabled={loading}>
+        <div style={previewStyle} className="rounded-2xl p-6 text-white shadow-sm">
+          <div className="text-xl font-semibold">{name || "Your organization"}</div>
+          <div className="mt-2 text-sm text-white/85">
+            {fontFamily} · {timezone}
+          </div>
+        </div>
+      </section>
+
+      <div className="flex justify-end">
+        <Button type="submit" disabled={loading}>
           {loading ? "Creating..." : "Create Organization"}
         </Button>
-      </form>
-    </div>
+      </div>
+    </form>
   )
 }

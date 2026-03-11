@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import {
+  ArrowRight,
   CalendarClock,
-  ChevronRight,
   ClipboardCheck,
   Clock3,
-  UserCircle2,
+  Layers3,
+  Sparkles,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -54,39 +55,81 @@ function formatTimeRange(start: string, end: string) {
   return `${clean(start)} – ${clean(end)}`
 }
 
-function MobilePrimaryCard({
+function calculateHours(start: string, end: string) {
+  const [startH, startM] = start.split(":").map(Number)
+  const [endH, endM] = end.split(":").map(Number)
+  const startMinutes = startH * 60 + startM
+  let endMinutes = endH * 60 + endM
+
+  if (endMinutes < startMinutes) endMinutes += 24 * 60
+
+  return (endMinutes - startMinutes) / 60
+}
+
+function formatHours(hours: number) {
+  const rounded = Math.round(hours * 10) / 10
+  return Number.isInteger(rounded) ? `${rounded.toFixed(0)} hrs` : `${rounded.toFixed(1)} hrs`
+}
+
+function ActionCard({
   eyebrow,
   title,
   body,
   href,
   buttonLabel,
+  icon,
   tone = "blue",
+  footer,
 }: {
   eyebrow: string
   title: string
   body: string
   href: string
   buttonLabel: string
-  tone?: "blue" | "emerald"
+  icon: React.ReactNode
+  tone?: "blue" | "emerald" | "slate"
+  footer?: React.ReactNode
 }) {
   const toneClasses =
     tone === "emerald"
-      ? "border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/60"
-      : "border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-indigo-100/70"
+      ? "border-emerald-200/80 bg-gradient-to-br from-emerald-50 via-white to-emerald-100/70"
+      : tone === "slate"
+        ? "border-slate-200 bg-gradient-to-br from-slate-50 via-white to-slate-100/70"
+        : "border-blue-200/80 bg-gradient-to-br from-blue-50 via-white to-indigo-100/70"
 
   return (
     <div className={`rounded-3xl border p-4 shadow-sm ${toneClasses}`}>
-      <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
-        {eyebrow}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-500">
+            {eyebrow}
+          </div>
+          <h3 className="mt-2 text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
+        </div>
+        <div className="rounded-2xl border border-white/70 bg-white/80 p-2 text-slate-700 shadow-sm">
+          {icon}
+        </div>
       </div>
-      <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
+
       <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+
+      {footer ? <div className="mt-4 grid grid-cols-2 gap-2">{footer}</div> : null}
+
       <Button asChild size="lg" className="mt-4 w-full rounded-2xl">
         <Link href={href}>
           {buttonLabel}
-          <ChevronRight className="h-4 w-4" />
+          <ArrowRight className="h-4 w-4" />
         </Link>
       </Button>
+    </div>
+  )
+}
+
+function StatPill({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/80 bg-white/85 px-3 py-2 shadow-sm">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">{label}</div>
+      <div className="mt-1 text-sm font-semibold text-slate-900">{value}</div>
     </div>
   )
 }
@@ -167,9 +210,7 @@ export function EmployeeDashboard() {
           loadedShifts = (shiftsData || [])
             .filter((shift: any) => assignedShiftIds.has(shift.id))
             .map((shift: any) => {
-              const period = published.find(
-                (item) => item.id === shift.scheduling_period_id,
-              )
+              const period = published.find((item) => item.id === shift.scheduling_period_id)
 
               return {
                 shift_id: shift.id,
@@ -194,16 +235,26 @@ export function EmployeeDashboard() {
     void loadDashboard()
   }, [organization?.id, member?.user_id, supabase])
 
-  const nextShift = useMemo(() => myShifts[0] || null, [myShifts])
   const latestPublished = useMemo(() => publishedPeriods[0] || null, [publishedPeriods])
+  const nextShift = useMemo(() => myShifts[0] || null, [myShifts])
   const availabilityHref = collectingPeriods[0]
     ? `/availability/${collectingPeriods[0].id}`
     : "/availability"
-  const scheduleHref = nextShift
-    ? `/my-schedule/${nextShift.period_id}`
-    : latestPublished
-      ? `/my-schedule/${latestPublished.id}`
+  const scheduleHref = latestPublished
+    ? `/my-schedule/${latestPublished.id}`
+    : nextShift
+      ? `/my-schedule/${nextShift.period_id}`
       : "/my-schedule"
+
+  const shiftsInLatestPublished = useMemo(() => {
+    if (!latestPublished) return []
+    return myShifts.filter((shift) => shift.period_id === latestPublished.id)
+  }, [latestPublished, myShifts])
+
+  const latestPublishedHours = useMemo(
+    () => shiftsInLatestPublished.reduce((total, shift) => total + calculateHours(shift.start_time, shift.end_time), 0),
+    [shiftsInLatestPublished],
+  )
 
   if (!organization) {
     return <div className="rounded-3xl border border-slate-200 bg-white p-6">No organization selected.</div>
@@ -216,116 +267,151 @@ export function EmployeeDashboard() {
   return (
     <PageShell
       title="Dashboard"
-      subtitle="See what needs your attention first."
-      actions={
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <Button asChild variant="outline" className="rounded-2xl">
-            <Link href="/my-schedule">My Schedule</Link>
-          </Button>
-          <Button asChild className="rounded-2xl">
-            <Link href={availabilityHref}>Submit Availability</Link>
-          </Button>
-        </div>
-      }
+      subtitle="See what needs your attention first and jump straight into it."
       className="space-y-5"
     >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <MobilePrimaryCard
+      <div className="grid gap-3 lg:grid-cols-3">
+        <ActionCard
           eyebrow={collectingPeriods.length > 0 ? "Availability needed" : "Availability"}
           title={
             collectingPeriods.length > 0
-              ? `${collectingPeriods.length} period${collectingPeriods.length === 1 ? "" : "s"} need your response`
+              ? `${collectingPeriods.length} open period${collectingPeriods.length === 1 ? "" : "s"}`
               : "You are caught up"
           }
           body={
             collectingPeriods.length > 0
-              ? `Open the form now so your manager can schedule you correctly. ${collectingPeriods[0].name} is ready for updates.`
-              : "There are no open availability periods right now, but you can still review the availability page."
+              ? `Complete ${collectingPeriods[0].name} so your manager can build the schedule.`
+              : "There are no active availability forms right now."
           }
           href={availabilityHref}
           buttonLabel={collectingPeriods.length > 0 ? "Open Availability Form" : "Open Availability"}
+          icon={<ClipboardCheck className="h-5 w-5" />}
           tone="emerald"
+          footer={
+            <>
+              <StatPill
+                label="Open forms"
+                value={`${collectingPeriods.length}`}
+              />
+              <StatPill
+                label="Next action"
+                value={collectingPeriods[0] ? "Respond now" : "None needed"}
+              />
+            </>
+          }
         />
 
-        <MobilePrimaryCard
-          eyebrow={latestPublished ? "Schedule posted" : "My schedule"}
-          title={latestPublished ? latestPublished.name : "No published schedule yet"}
+        <ActionCard
+          eyebrow={latestPublished ? "My schedule" : "Schedule"}
+          title={latestPublished ? latestPublished.name : "No posted schedule"}
           body={
             latestPublished
-              ? nextShift
-                ? `Your next assigned shift is ${formatDate(nextShift.date)} from ${formatTimeRange(nextShift.start_time, nextShift.end_time)}.`
-                : "A schedule has been posted. Open it now to check your assigned shifts and teammates."
-              : "As soon as your manager publishes a schedule, it will show up here for one-tap access."
+              ? "Open your posted schedule, check assigned shifts, and see what your week looks like."
+              : "Your schedule card will light up here as soon as a manager publishes it."
           }
           href={scheduleHref}
-          buttonLabel={latestPublished ? "Open Schedule" : "Go to My Schedule"}
+          buttonLabel={latestPublished ? "Open My Schedule" : "Go to My Schedule"}
+          icon={<Layers3 className="h-5 w-5" />}
           tone="blue"
+          footer={
+            <>
+              <StatPill
+                label="Shifts"
+                value={`${shiftsInLatestPublished.length}`}
+              />
+              <StatPill
+                label="Expected hours"
+                value={formatHours(latestPublishedHours)}
+              />
+            </>
+          }
+        />
+
+        <ActionCard
+          eyebrow={nextShift ? "Next shift" : "Up next"}
+          title={nextShift ? nextShift.label : "No assigned shift yet"}
+          body={
+            nextShift
+              ? `${formatDate(nextShift.date)} • ${formatTimeRange(nextShift.start_time, nextShift.end_time)}`
+              : "As soon as you are assigned, your next shift will show here."
+          }
+          href={scheduleHref}
+          buttonLabel={nextShift ? "View Shift Details" : "Open My Schedule"}
+          icon={<CalendarClock className="h-5 w-5" />}
+          tone="slate"
+          footer={
+            <>
+              <StatPill
+                label="Date"
+                value={nextShift ? formatDate(nextShift.date) : "—"}
+              />
+              <StatPill
+                label="Period"
+                value={nextShift ? nextShift.period_name : latestPublished?.name || "—"}
+              />
+            </>
+          }
         />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
         <OverviewCard
-          label="Availability needed"
-          value={`${collectingPeriods.length}`}
-          helper={
-            collectingPeriods.length > 0
-              ? "Open periods still need your response."
-              : "No open periods right now."
-          }
-        />
-        <OverviewCard
           label="Published schedules"
           value={`${publishedPeriods.length}`}
-          helper={latestPublished ? `Latest: ${latestPublished.name}` : "Nothing published yet."}
+          helper={latestPublished ? `Latest: ${latestPublished.name}` : "Nothing posted yet."}
         />
         <OverviewCard
-          label="Assigned shifts"
+          label="Total assigned shifts"
           value={`${myShifts.length}`}
-          helper={nextShift ? `Next: ${nextShift.label}` : "No assigned shifts yet."}
+          helper={nextShift ? `Next up: ${nextShift.label}` : "No assigned shifts yet."}
+        />
+        <OverviewCard
+          label="Expected hours"
+          value={formatHours(latestPublishedHours)}
+          helper={latestPublished ? "For the latest published schedule." : "Updates when a schedule is posted."}
         />
       </div>
 
       <SectionCard
         title="Quick actions"
-        description="Fast links for the two things employees need most on mobile."
+        description="Fast, mobile-friendly shortcuts for the things employees use most."
       >
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           <Link
             href={availabilityHref}
-            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300"
+            className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300"
           >
             <ClipboardCheck className="h-5 w-5 text-emerald-600" />
             <div className="mt-3 text-base font-semibold text-slate-900">Submit availability</div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Go straight to the active form without hunting through the app.
+              Jump straight into the active form.
             </p>
           </Link>
 
           <Link
             href={scheduleHref}
-            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300"
+            className="rounded-3xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-300"
           >
             <CalendarClock className="h-5 w-5 text-blue-600" />
-            <div className="mt-3 text-base font-semibold text-slate-900">Open schedule</div>
+            <div className="mt-3 text-base font-semibold text-slate-900">Open my schedule</div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Jump directly into the latest posted schedule or your next assigned period.
+              Go directly to the posted schedule and teammates.
             </p>
           </Link>
 
-          <Link
-            href="/profile"
-            className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300"
-          >
-            <UserCircle2 className="h-5 w-5 text-slate-700" />
-            <div className="mt-3 text-base font-semibold text-slate-900">Profile</div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <Sparkles className="h-5 w-5 text-slate-700" />
+            <div className="mt-3 text-base font-semibold text-slate-900">At a glance</div>
             <p className="mt-1 text-sm leading-6 text-slate-600">
-              Keep your account details updated.
+              {nextShift
+                ? `Next shift: ${nextShift.label} on ${formatDate(nextShift.date)}.`
+                : "No shift is assigned yet for the latest published period."}
             </p>
-          </Link>
+          </div>
         </div>
       </SectionCard>
 
-      <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
         <SectionCard title="Upcoming shifts" description="Your next assigned shifts in published schedules.">
           {myShifts.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-600">
@@ -386,7 +472,7 @@ export function EmployeeDashboard() {
       </div>
 
       {nextShift ? (
-        <SectionCard title="Next shift" description="A quick glance at what is coming up next.">
+        <SectionCard title="Next shift details" description="A clean glance at when you work next.">
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
@@ -404,7 +490,7 @@ export function EmployeeDashboard() {
             </div>
             <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
               <div className="flex items-center gap-2 text-sm font-medium text-slate-500">
-                <ClipboardCheck className="h-4 w-4" /> Period
+                <Layers3 className="h-4 w-4" /> Schedule
               </div>
               <div className="mt-2 text-base font-semibold text-slate-900">{nextShift.period_name}</div>
             </div>

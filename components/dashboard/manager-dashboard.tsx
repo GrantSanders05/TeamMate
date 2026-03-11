@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { Archive, CalendarClock, ClipboardList, Settings, Users2 } from "lucide-react"
+import { Archive, ArrowRight, CalendarClock, ClipboardList, Settings, Users2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import { useOrgSafe } from "@/lib/hooks/use-org-safe"
@@ -65,13 +65,45 @@ function DashboardStat({
   helper: string
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-        {label}
-      </p>
-      <p className="mt-2 text-3xl font-semibold text-slate-900">{value}</p>
-      <p className="mt-1 text-sm text-slate-500">{helper}</p>
+    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-2 text-sm text-slate-500">{helper}</p>
     </div>
+  )
+}
+
+function QuickAction({
+  href,
+  icon: Icon,
+  title,
+  description,
+  subtle,
+}: {
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+  title: string
+  description: string
+  subtle?: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group flex h-full items-start justify-between gap-4 rounded-3xl border p-5 shadow-sm transition ${
+        subtle
+          ? "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50"
+          : "border-blue-200 bg-gradient-to-br from-blue-50 via-white to-indigo-50 hover:border-blue-300"
+      }`}
+    >
+      <div>
+        <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+          <Icon className="h-5 w-5" />
+        </div>
+        <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
+      </div>
+      <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-slate-700" />
+    </Link>
   )
 }
 
@@ -92,21 +124,20 @@ export function ManagerDashboard() {
         return
       }
 
-      const [{ data: periodData }, { data: dropData }, { data: memberData }] =
-        await Promise.all([
-          supabase
-            .from("scheduling_periods")
-            .select("id, name, start_date, end_date, status")
-            .eq("organization_id", organization.id)
-            .order("start_date", { ascending: false }),
-          supabase.from("drop_requests").select("id").eq("status", "pending"),
-          supabase
-            .from("organization_members")
-            .select("id")
-            .eq("organization_id", organization.id)
-            .eq("role", "employee")
-            .eq("is_active", true),
-        ])
+      const [{ data: periodData }, { data: dropData }, { data: memberData }] = await Promise.all([
+        supabase
+          .from("scheduling_periods")
+          .select("id, name, start_date, end_date, status")
+          .eq("organization_id", organization.id)
+          .order("start_date", { ascending: false }),
+        supabase.from("drop_requests").select("id").eq("status", "pending"),
+        supabase
+          .from("organization_members")
+          .select("id")
+          .eq("organization_id", organization.id)
+          .eq("role", "employee")
+          .eq("is_active", true),
+      ])
 
       if (!mounted) return
 
@@ -127,100 +158,112 @@ export function ManagerDashboard() {
     () => periods.filter((p) => ["draft", "collecting", "scheduling", "published"].includes(p.status)),
     [periods],
   )
-  const archivedPeriods = useMemo(
-    () => periods.filter((p) => p.status === "archived"),
-    [periods],
-  )
-  const publishedPeriods = useMemo(
-    () => periods.filter((p) => p.status === "published"),
-    [periods],
-  )
-  const collectingPeriods = useMemo(
-    () => periods.filter((p) => p.status === "collecting"),
-    [periods],
-  )
+  const archivedPeriods = useMemo(() => periods.filter((p) => p.status === "archived"), [periods])
+  const publishedPeriods = useMemo(() => periods.filter((p) => p.status === "published"), [periods])
+  const collectingPeriods = useMemo(() => periods.filter((p) => p.status === "collecting"), [periods])
   const latestPeriod = activePeriods[0] || periods[0] || null
 
   if (!organization) {
-    return <div className="text-sm text-slate-500">No organization selected.</div>
+    return <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600">No organization selected.</div>
   }
 
   if (loading) {
-    return <div className="text-sm text-slate-500">Loading dashboard...</div>
+    return <div className="rounded-3xl border border-slate-200 bg-white p-6 text-sm text-slate-600">Loading dashboard...</div>
   }
 
   return (
     <PageShell
-      title="Manager Dashboard"
-      subtitle={organization.name}
+      title="Dashboard"
+      subtitle="Manage schedules, employees, and upcoming periods from one place."
       actions={
         <div className="flex flex-wrap items-center gap-3">
-          <Button asChild>
+          <Button asChild className="shadow-sm">
             <Link href="/schedule">Open Schedule</Link>
           </Button>
-          <Button asChild variant="outline">
+          <Button asChild variant="outline" className="shadow-sm">
             <Link href="/employees">Manage Employees</Link>
           </Button>
         </div>
       }
     >
       <div className="space-y-6">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <DashboardStat
-            label="Active Periods"
-            value={activePeriods.length}
-            helper="Current schedule periods still in progress."
-          />
-          <DashboardStat
-            label="Pending Drops"
-            value={pendingDrops}
-            helper="Requests waiting on manager review."
-          />
-          <DashboardStat
-            label="Team Size"
-            value={employeeCount}
-            helper="Active employees in this organization."
-          />
-          <DashboardStat
-            label="Archived"
-            value={archivedPeriods.length}
-            helper="Finished periods saved in history."
-          />
-        </div>
+        <section className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 rounded-[32px] border border-slate-200 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 p-6 text-white shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-300">Quick Actions</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight">Run your scheduling workflow.</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-300">
+              Start in the places you use most: schedules, employees, history, and organization settings.
+            </p>
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <SectionCard title="Recent Periods" className="shadow-sm">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <QuickAction
+                href="/schedule"
+                icon={CalendarClock}
+                title="Open Schedule"
+                description="Build periods, assign shifts, and publish the week."
+              />
+              <QuickAction
+                href="/employees"
+                icon={Users2}
+                title="Manage Employees"
+                description="Review your team, availability, and active employee roster."
+                subtle
+              />
+              <QuickAction
+                href="/history"
+                icon={Archive}
+                title="History"
+                description="Look back at archived schedules and prior periods."
+                subtle
+              />
+              <QuickAction
+                href="/settings"
+                icon={Settings}
+                title="Settings"
+                description="Update branding, organization details, and workspace tools."
+                subtle
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+            <DashboardStat label="Active Periods" value={activePeriods.length} helper="Open or in-progress schedules" />
+            <DashboardStat label="Employees" value={employeeCount} helper="Active team members in this organization" />
+            <DashboardStat label="Drop Requests" value={pendingDrops} helper="Waiting for manager review" />
+          </div>
+        </section>
+
+        <div className="grid gap-6 xl:grid-cols-[1.3fr_0.9fr]">
+          <SectionCard title="Recent Periods" description="Your latest schedule periods and their current status.">
             {periods.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
                 No schedule periods yet.
               </div>
             ) : (
               <div className="space-y-3">
                 {periods.slice(0, 6).map((period) => {
                   const meta = statusMeta(period.status)
+
                   return (
                     <div
                       key={period.id}
-                      className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between"
+                      className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center sm:justify-between"
                     >
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-base font-semibold text-slate-900">
-                            {period.name}
-                          </h3>
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${meta.pill}`}
-                          >
-                            {meta.label}
-                          </span>
-                        </div>
+                        <h3 className="text-sm font-semibold text-slate-900">{period.name}</h3>
                         <p className="mt-1 text-sm text-slate-500">
                           {formatDate(period.start_date)} – {formatDate(period.end_date)}
                         </p>
                       </div>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href="/schedule">Open</Link>
-                      </Button>
+
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${meta.pill}`}>
+                          {meta.label}
+                        </span>
+                        <Button asChild variant="outline" size="sm">
+                          <Link href="/schedule">Open</Link>
+                        </Button>
+                      </div>
                     </div>
                   )
                 })}
@@ -228,113 +271,50 @@ export function ManagerDashboard() {
             )}
           </SectionCard>
 
-          <div className="space-y-6">
-            <SectionCard title="Quick Actions" className="shadow-sm">
-              <div className="grid gap-3">
-                <Link
-                  href="/schedule"
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <CalendarClock className="h-5 w-5 text-slate-500" />
-                    <div>
-                      <p className="font-medium text-slate-900">Schedules</p>
-                      <p className="text-sm text-slate-500">Build periods, shifts, and assignments</p>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link
-                  href="/history"
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <Archive className="h-5 w-5 text-slate-500" />
-                    <div>
-                      <p className="font-medium text-slate-900">History</p>
-                      <p className="text-sm text-slate-500">Review archived schedules</p>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link
-                  href="/settings"
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings className="h-5 w-5 text-slate-500" />
-                    <div>
-                      <p className="font-medium text-slate-900">Settings</p>
-                      <p className="text-sm text-slate-500">Manage branding and org tools</p>
-                    </div>
-                  </div>
-                </Link>
-
-                <Link
-                  href="/employees"
-                  className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-3">
-                    <Users2 className="h-5 w-5 text-slate-500" />
-                    <div>
-                      <p className="font-medium text-slate-900">Employees</p>
-                      <p className="text-sm text-slate-500">View and manage your team</p>
-                    </div>
-                  </div>
-                </Link>
+          <SectionCard title="Overview" description="Key scheduling signals for the current workspace.">
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Current Period</p>
+                <p className="mt-2 text-sm font-medium text-slate-900">
+                  {latestPeriod
+                    ? `${latestPeriod.name} · ${formatDate(latestPeriod.start_date)} – ${formatDate(latestPeriod.end_date)}`
+                    : "Create your first period to get started."}
+                </p>
+                {latestPeriod ? (
+                  <span className={`mt-3 inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusMeta(latestPeriod.status).pill}`}>
+                    {statusMeta(latestPeriod.status).label}
+                  </span>
+                ) : null}
               </div>
-            </SectionCard>
 
-            <SectionCard title="At a Glance" className="shadow-sm">
-              <div className="space-y-4 text-sm">
-                <div className="flex items-start justify-between gap-3 rounded-2xl bg-slate-50 p-4">
-                  <div>
-                    <p className="font-medium text-slate-900">Current Period</p>
-                    <p className="mt-1 text-slate-500">
-                      {latestPeriod
-                        ? `${latestPeriod.name} · ${formatDate(latestPeriod.start_date)} – ${formatDate(latestPeriod.end_date)}`
-                        : "Create your first period to get started."}
-                    </p>
-                  </div>
-                  {latestPeriod ? (
-                    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusMeta(latestPeriod.status).pill}`}>
-                      {statusMeta(latestPeriod.status).label}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="font-medium text-slate-900">Availability</p>
-                    <p className="mt-1 text-slate-500">
-                      {collectingPeriods.length === 0
-                        ? "No periods are collecting availability right now."
-                        : `${collectingPeriods.length} period${collectingPeriods.length === 1 ? "" : "s"} still collecting availability.`}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <p className="font-medium text-slate-900">Published</p>
-                    <p className="mt-1 text-slate-500">
-                      {publishedPeriods.length === 0
-                        ? "No periods are published right now."
-                        : `${publishedPeriods.length} published period${publishedPeriods.length === 1 ? "" : "s"} are live for employees.`}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 p-4 sm:col-span-2">
-                    <div className="flex items-center gap-2">
-                      <ClipboardList className="h-4 w-4 text-slate-500" />
-                      <p className="font-medium text-slate-900">Drop Requests</p>
-                    </div>
-                    <p className="mt-1 text-slate-500">
-                      {pendingDrops === 0
-                        ? "No employee drop requests are waiting right now."
-                        : `${pendingDrops} request${pendingDrops === 1 ? "" : "s"} need manager review.`}
-                    </p>
-                  </div>
-                </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-slate-900">Availability</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {collectingPeriods.length === 0
+                    ? "No periods are collecting availability right now."
+                    : `${collectingPeriods.length} period${collectingPeriods.length === 1 ? "" : "s"} still collecting availability.`}
+                </p>
               </div>
-            </SectionCard>
-          </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-slate-900">Published</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {publishedPeriods.length === 0
+                    ? "No periods are published right now."
+                    : `${publishedPeriods.length} published period${publishedPeriods.length === 1 ? "" : "s"} are live for employees.`}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                <p className="text-sm font-semibold text-slate-900">Archived</p>
+                <p className="mt-2 text-sm text-slate-600">
+                  {archivedPeriods.length === 0
+                    ? "No archived periods yet."
+                    : `${archivedPeriods.length} archived period${archivedPeriods.length === 1 ? "" : "s"} available for review.`}
+                </p>
+              </div>
+            </div>
+          </SectionCard>
         </div>
       </div>
     </PageShell>
